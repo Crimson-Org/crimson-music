@@ -9,7 +9,7 @@
 #include "song-page.h"
 #include "state.h"
 #include "mpris.h"
-#include "tray.h"
+#include "common/tray.h"
 #include "window.h"
 
 /* Navigation tags of the pages that are not an artist or album, which use their own ids */

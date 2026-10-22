@@ -1,3 +1,4 @@
+#include "../lang/en.h"
 #include "common/log.h"
 #include "info-dialog.h"
 #include "last-song.h"
@@ -298,7 +299,7 @@ void receive_player(const PlayerReport *report, gpointer data) {
 	gboolean is_waiting = report->state != PLAYER_PLAYING && report->state != PLAYER_PAUSED
 		&& report->state != PLAYER_ENDED;
 	show_playing(window, window->is_playing, is_waiting);
-	set_tray_playing(window->tray, window->is_playing);
+	set_tray_label(window->tray, 0, window->is_playing ? TEXT_PAUSE : TEXT_PLAY);
 	set_mpris_playing(window->mpris, window->is_playing);
 	set_mpris_position(window->mpris, report->time);
 	show_player_time(window->bar, report->time, report->duration);

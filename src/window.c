@@ -1004,7 +1004,16 @@ Window *create_window(GtkApplication *application) {
 		load_cached_songs(liked);
 	update_liked(window);
 	update_top_title(window);
-	window->tray = create_tray(G_APPLICATION(application), GTK_WINDOW(window->window));
+	/* The first entry switches between Play and Pause as the song plays */
+	static const TrayEntry TRAY_ENTRIES[] = {
+		{TEXT_PLAY, "win.play-pause"},
+		{TEXT_NEXT, "win.next"},
+		{TEXT_PREVIOUS, "win.previous"},
+		{NULL, NULL},
+		{TEXT_QUIT_APPLICATION, "app.quit"},
+	};
+	TraySetup tray = {TRAY_ENTRIES, G_N_ELEMENTS(TRAY_ENTRIES), "win.play-pause", "win.volume-step"};
+	window->tray = create_tray(G_APPLICATION(application), GTK_WINDOW(window->window), &tray);
 	window->mpris = create_mpris(G_APPLICATION(application), GTK_WINDOW(window->window));
 	note_first_frame(GTK_WIDGET(window->window));
 	restore_last_song(window);
