@@ -10,6 +10,7 @@
 #define CACHE_FOLDER "library"
 #define PLAYLISTS_FILE "playlists-2.cache"
 #define SONGS_FILE_FORMAT "songs-2-%s.cache"
+#define HOME_FILE "home-1.cache"
 #define SAFE_NAME_CHARACTERS "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
 #define MAXIMUM_FIELDS 10
 #define DISLIKED_STATUS "DISLIKE"
@@ -56,6 +57,7 @@ typedef struct {
 
 static const Shape PLAYLIST_SHAPE = {PLAYLIST_FIELDS, G_N_ELEMENTS(PLAYLIST_FIELDS), "(ssss)"};
 static const Shape SONG_SHAPE = {SONG_FIELDS, G_N_ELEMENTS(SONG_FIELDS), "(ssssssssss)"};
+static const Shape CARD_SHAPE = {CARD_FIELDS, G_N_ELEMENTS(CARD_FIELDS), "(ssss)"};
 
 static GHashTable *disliked_videos;
 
@@ -137,6 +139,23 @@ void free_card(gpointer card) {
 	free_fields(card, CARD_FIELDS, G_N_ELEMENTS(CARD_FIELDS));
 	g_free(((Card *)card)->video_id);
 	g_free(card);
+}
+
+
+void free_shelf(gpointer data) {
+	Shelf *shelf = data;
+	g_free(shelf->title);
+	g_ptr_array_unref(shelf->cards);
+	g_free(shelf);
+}
+
+
+void free_home(Home *home) {
+	g_free(home->history_id);
+	g_ptr_array_unref(home->history);
+	g_ptr_array_unref(home->shelves);
+	g_ptr_array_unref(home->songs);
+	g_free(home);
 }
 
 
@@ -232,6 +251,30 @@ GPtrArray *read_cards(JSCValue *array) {
 }
 
 
+static gpointer create_read_shelf(JSCValue *item) {
+	Shelf *shelf = g_new0(Shelf, 1);
+	shelf->title = read_text(item, "title");
+	g_autoptr(JSCValue) round = jsc_value_object_get_property(item, "round");
+	g_autoptr(JSCValue) cards = jsc_value_object_get_property(item, "cards");
+	shelf->is_round = jsc_value_to_boolean(round);
+	shelf->cards = read_cards(cards);
+	return shelf;
+}
+
+
+Home *read_home(JSCValue *message) {
+	Home *home = g_new0(Home, 1);
+	g_autoptr(JSCValue) history = jsc_value_object_get_property(message, "history");
+	g_autoptr(JSCValue) shelves = jsc_value_object_get_property(message, "sections");
+	g_autoptr(JSCValue) songs = jsc_value_object_get_property(message, "songs");
+	home->history_id = read_text(message, "historyId");
+	home->history = read_songs(history);
+	home->shelves = read_array(shelves, create_read_shelf, free_shelf);
+	home->songs = read_songs(songs);
+	return home;
+}
+
+
 static GVariant *describe_object(gpointer object, const Shape *shape) {
 	GVariant *texts[MAXIMUM_FIELDS];
 	for (guint index = 0; index < shape->count; index++) {
@@ -252,10 +295,15 @@ static GVariant *describe_objects(GPtrArray *objects, const Shape *shape) {
 }
 
 
-static gpointer create_described(GType type, GVariant *tuple, const Shape *shape) {
-	gpointer object = g_object_new(type, NULL);
+static void fill_described(gpointer object, GVariant *tuple, const Shape *shape) {
 	for (guint index = 0; index < shape->count; index++)
 		g_variant_get_child(tuple, index, "s", get_field(object, &shape->fields[index]));
+}
+
+
+static gpointer create_described(GType type, GVariant *tuple, const Shape *shape) {
+	gpointer object = g_object_new(type, NULL);
+	fill_described(object, tuple, shape);
 	return object;
 }
 
@@ -347,16 +395,21 @@ gboolean replace_playlists(GListStore *store, GPtrArray *playlists) {
 }
 
 
-gboolean replace_songs(CrimsonPlaylist *playlist, GPtrArray *songs) {
-	gboolean had_songs = playlist->has_songs;
-	playlist->has_songs = TRUE;
-	g_autoptr(GPtrArray) current = list_store_items(playlist->songs);
+gboolean update_song_store(GListStore *store, GPtrArray *songs) {
+	g_autoptr(GPtrArray) current = list_store_items(store);
 	guint start, end;
 	find_changes(current, songs, songs_match, &start, &end);
 	if (start == current->len && start == songs->len)
-		return !had_songs;
-	splice_changes(playlist->songs, current, songs, start, end);
+		return FALSE;
+	splice_changes(store, current, songs, start, end);
 	return TRUE;
+}
+
+
+gboolean replace_songs(CrimsonPlaylist *playlist, GPtrArray *songs) {
+	gboolean had_songs = playlist->has_songs;
+	playlist->has_songs = TRUE;
+	return update_song_store(playlist->songs, songs) || !had_songs;
 }
 
 
@@ -528,6 +581,67 @@ void save_cached_songs(CrimsonPlaylist *playlist) {
 	g_autoptr(GPtrArray) songs = list_store_items(playlist->songs);
 	g_autoptr(GVariant) array = describe_objects(songs, &SONG_SHAPE);
 	g_autoptr(GVariant) value = g_variant_ref_sink(g_variant_new("(b@*)", playlist->is_editable, array));
+	write_cache(path, value);
+}
+
+
+/* Home is cached as the history page's id, the songs played lately, the shelves and the picked songs */
+static char *get_home_format(void) {
+	return g_strdup_printf("(sa%sa(sba%s)a%s)", SONG_SHAPE.tuple, CARD_SHAPE.tuple, SONG_SHAPE.tuple);
+}
+
+
+static GPtrArray *read_described_cards(GVariant *array) {
+	GPtrArray *cards = g_ptr_array_new_with_free_func(free_card);
+	for (gsize index = 0; index < g_variant_n_children(array); index++) {
+		g_autoptr(GVariant) tuple = g_variant_get_child_value(array, index);
+		Card *card = g_new0(Card, 1);
+		fill_described(card, tuple, &CARD_SHAPE);
+		g_ptr_array_add(cards, card);
+	}
+	return cards;
+}
+
+
+Home *load_cached_home(void) {
+	g_autofree char *path = get_cache_path(HOME_FILE);
+	g_autofree char *format = get_home_format();
+	g_autoptr(GVariant) cached = read_cache(path, format);
+	if (!cached)
+		return NULL;
+	Home *home = g_new0(Home, 1);
+	g_autoptr(GVariant) history = g_variant_get_child_value(cached, 1);
+	g_autoptr(GVariant) shelves = g_variant_get_child_value(cached, 2);
+	g_autoptr(GVariant) songs = g_variant_get_child_value(cached, 3);
+	g_variant_get_child(cached, 0, "s", &home->history_id);
+	home->history = read_described(history, CRIMSON_TYPE_SONG, &SONG_SHAPE);
+	home->shelves = g_ptr_array_new_with_free_func(free_shelf);
+	for (gsize index = 0; index < g_variant_n_children(shelves); index++) {
+		Shelf *shelf = g_new0(Shelf, 1);
+		g_autoptr(GVariant) cards = NULL;
+		g_variant_get_child(shelves, index, "(sb@*)", &shelf->title, &shelf->is_round, &cards);
+		shelf->cards = read_described_cards(cards);
+		g_ptr_array_add(home->shelves, shelf);
+	}
+	home->songs = read_described(songs, CRIMSON_TYPE_SONG, &SONG_SHAPE);
+	return home;
+}
+
+
+void save_cached_home(Home *home) {
+	g_autofree char *path = get_cache_path(HOME_FILE);
+	g_autofree char *shelf_format = g_strdup_printf("a(sba%s)", CARD_SHAPE.tuple);
+	GVariantBuilder shelves;
+	g_variant_builder_init(&shelves, G_VARIANT_TYPE(shelf_format));
+	for (guint index = 0; index < home->shelves->len; index++) {
+		Shelf *shelf = g_ptr_array_index(home->shelves, index);
+		g_autoptr(GVariant) cards = describe_objects(shelf->cards, &CARD_SHAPE);
+		g_variant_builder_add(&shelves, "(sb@*)", shelf->title, shelf->is_round, cards);
+	}
+	g_autoptr(GVariant) history = describe_objects(home->history, &SONG_SHAPE);
+	g_autoptr(GVariant) songs = describe_objects(home->songs, &SONG_SHAPE);
+	g_autoptr(GVariant) value = g_variant_ref_sink(g_variant_new("(s@*@*@*)", home->history_id, history,
+		g_variant_builder_end(&shelves), songs));
 	write_cache(path, value);
 }
 

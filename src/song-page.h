@@ -46,6 +46,9 @@ void set_song_page_empty(SongPage *page, const char *icon, const char *title, co
 /* Adds a titled row of cards at the top or the bottom and returns it for removing later, or NULL for no cards */
 GtkWidget *add_song_page_cards(SongPage *page, const char *title, GPtrArray *cards, gboolean is_round,
 	gboolean is_first);
+/* Shows the shelves in order, leaving the ones whose cards did not change as they are, so a refresh never jolts
+ * the page, while a changed shelf crossfades to its new cards and shelves that come or go slide open or shut */
+void set_song_page_shelves(SongPage *page, GPtrArray *shelves);
 /* All the cards wrapped in rows the page's width, for a page made of cards alone */
 void add_song_page_card_grid(SongPage *page, GPtrArray *cards, gboolean is_round);
 /* The waiting page shows a row of card shapes above its song shapes, for pages whose results bring cards */

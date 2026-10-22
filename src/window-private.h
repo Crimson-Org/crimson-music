@@ -74,6 +74,8 @@ struct Window {
 	/* Songs the account played lately, newest first, as Home last listed them, and the page that lists them all */
 	GListStore *history;
 	char *history_id;
+	/* Home as YouTube last sent it, shown at once the next time Home opens */
+	Home *home;
 	/* Songs YouTube Music suggests for each of the listener's own playlists, by playlist id, asked once a session */
 	GHashTable *suggestions;
 	/* Artists and albums pinned to the sidebar, as cards */

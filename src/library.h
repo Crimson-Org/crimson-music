@@ -50,6 +50,25 @@ GType crimson_card_get_type(void);
 void free_card(gpointer card);
 Card *copy_card(const Card *card);
 
+/* A titled row of cards, with round covers for artists */
+typedef struct {
+	char *title;
+	gboolean is_round;
+	GPtrArray *cards;
+} Shelf;
+
+void free_shelf(gpointer shelf);
+G_DEFINE_AUTOPTR_CLEANUP_FUNC(Shelf, free_shelf)
+
+/* Home as YouTube Music last sent it, with the songs played lately and the page listing them all, the shelves and
+ * the songs it picks */
+typedef struct {
+	char *history_id;
+	GPtrArray *history, *shelves, *songs;
+} Home;
+
+void free_home(Home *home);
+
 /* A length as 3:42, or 1:04:33 from an hour on */
 char *format_song_length(double seconds);
 /* The seconds in a song's length as YouTube Music writes it, or 0 without one */
@@ -63,6 +82,7 @@ char *get_song_artist_id(CrimsonSong *song);
 GPtrArray *read_playlists(JSCValue *array);
 GPtrArray *read_songs(JSCValue *array);
 GPtrArray *read_cards(JSCValue *array);
+Home *read_home(JSCValue *message);
 
 /* Songs the account dislikes, as YouTube last said with a song or as a dislike made here since */
 gboolean is_video_disliked(const char *video_id);
@@ -71,6 +91,7 @@ void set_video_disliked(const char *video_id, gboolean is_disliked);
 /* Swaps the items in only when they differ, so an unchanged refresh leaves the list and its scrolling alone */
 gboolean replace_playlists(GListStore *store, GPtrArray *playlists);
 gboolean replace_songs(CrimsonPlaylist *playlist, GPtrArray *songs);
+gboolean update_song_store(GListStore *store, GPtrArray *songs);
 /* Edits sent to YouTube stay on every list of the playlist until a list fresh from YouTube shows them */
 void note_playlist_addition(CrimsonPlaylist *playlist, CrimsonSong *song);
 void note_playlist_removal(CrimsonPlaylist *playlist, CrimsonSong *song);
@@ -92,4 +113,6 @@ void load_cached_playlists(GListStore *store, const char *const *order);
 void load_cached_songs(CrimsonPlaylist *playlist);
 void save_cached_playlists(GListStore *store);
 void save_cached_songs(CrimsonPlaylist *playlist);
+Home *load_cached_home(void);
+void save_cached_home(Home *home);
 void clear_cache(void);

@@ -457,6 +457,7 @@ static void sign_out(Window *window) {
 	g_list_store_remove_all(window->playlists);
 	load_local_playlists_into(window);
 	clear_cache();
+	g_clear_pointer(&window->home, free_home);
 	update_sidebar(window);
 	sign_out_engine(window->engine);
 }

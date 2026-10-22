@@ -21,6 +21,11 @@
 #define SKELETON_WIDTH 1000
 static const int SKELETON_TITLE_WIDTHS[] = {260, 180, 320, 220, 280};
 #define CARD_GRID_SPACING 6
+/* A changed shelf crossfades to its new cards, and a shelf that comes or goes slides open or shut, in this time */
+#define SHELF_MOTION_MILLISECONDS 300
+#define SHELF_TITLE_KEY "shelf-title"
+#define SHELF_CARDS_KEY "shelf-cards"
+#define SHELF_ROWS_KEY "shelf-rows"
 #define HEADING_ARTWORK_SIZE 120
 #define CARD_ARTWORK_SIZE 120
 /* Content stops growing at this width, so lines stay easy to follow on wide windows */
@@ -693,23 +698,30 @@ static void stagger_entrance(GtkWidget *card, guint index) {
 }
 
 
-GtkWidget *add_song_page_cards(SongPage *page, const char *title, GPtrArray *cards, gboolean is_round,
-	gboolean is_first) {
-	if (!cards->len)
-		return NULL;
-	GtkWidget *section = gtk_box_new(GTK_ORIENTATION_VERTICAL, 12);
-	gtk_box_append(GTK_BOX(section), create_section_heading(title));
+static GtkWidget *create_card_row(SongPage *page, GPtrArray *cards, gboolean is_round, gboolean is_staggered) {
 	GtkWidget *row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
 	gtk_widget_add_css_class(row, "card-row");
 	for (guint index = 0; index < cards->len; index++) {
 		GtkWidget *card = create_card(g_ptr_array_index(cards, index), is_round, page);
-		stagger_entrance(card, index);
+		if (is_staggered)
+			stagger_entrance(card, index);
 		gtk_box_append(GTK_BOX(row), card);
 	}
 	GtkWidget *scrolled = gtk_scrolled_window_new();
 	gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled), GTK_POLICY_AUTOMATIC, GTK_POLICY_NEVER);
 	gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled), row);
 	add_smooth_scrolling(GTK_SCROLLED_WINDOW(scrolled));
+	return scrolled;
+}
+
+
+GtkWidget *add_song_page_cards(SongPage *page, const char *title, GPtrArray *cards, gboolean is_round,
+	gboolean is_first) {
+	if (!cards->len)
+		return NULL;
+	GtkWidget *section = gtk_box_new(GTK_ORIENTATION_VERTICAL, 12);
+	gtk_box_append(GTK_BOX(section), create_section_heading(title));
+	GtkWidget *scrolled = create_card_row(page, cards, is_round, TRUE);
 	gtk_box_append(GTK_BOX(section), scrolled);
 	if (is_first)
 		gtk_box_prepend(GTK_BOX(page->cards), section);
@@ -719,6 +731,115 @@ GtkWidget *add_song_page_cards(SongPage *page, const char *title, GPtrArray *car
 	gtk_widget_set_visible(section, filter_cards(section, page->query));
 	replay_entrance(scrolled);
 	return section;
+}
+
+
+/* Every word and picture a shelf shows, so a refresh can tell whether its cards changed */
+static char *describe_shelf(Shelf *shelf) {
+	GString *text = g_string_new(shelf->is_round ? "round" : "");
+	for (guint index = 0; index < shelf->cards->len; index++) {
+		Card *card = g_ptr_array_index(shelf->cards, index);
+		g_string_append_printf(text, "\x1e%s\x1f%s\x1f%s\x1f%s", card->id, card->title, card->subtitle,
+			card->artwork);
+	}
+	return g_string_free(text, FALSE);
+}
+
+
+/* The row a shelf showed before stays only until its new row has faded in over it */
+static void drop_hidden_rows(GtkStack *rows) {
+	if (gtk_stack_get_transition_running(rows))
+		return;
+	GtkWidget *shown = gtk_stack_get_visible_child(rows);
+	GtkWidget *next = NULL;
+	for (GtkWidget *row = gtk_widget_get_first_child(GTK_WIDGET(rows)); row; row = next) {
+		next = gtk_widget_get_next_sibling(row);
+		if (row != shown)
+			gtk_stack_remove(rows, row);
+	}
+}
+
+
+static void fill_shelf(SongPage *page, GtkWidget *widget, Shelf *shelf, gboolean is_staggered) {
+	g_autofree char *description = describe_shelf(shelf);
+	if (g_strcmp0(description, g_object_get_data(G_OBJECT(widget), SHELF_CARDS_KEY)) == 0)
+		return;
+	g_object_set_data_full(G_OBJECT(widget), SHELF_CARDS_KEY, g_steal_pointer(&description), g_free);
+	GtkStack *rows = g_object_get_data(G_OBJECT(widget), SHELF_ROWS_KEY);
+	GtkWidget *row = create_card_row(page, shelf->cards, shelf->is_round, is_staggered);
+	gtk_stack_add_child(rows, row);
+	gtk_stack_set_visible_child(rows, row);
+	gtk_widget_set_visible(widget, filter_cards(widget, page->query));
+}
+
+
+static void drop_closed_shelf(GtkRevealer *shelf, GParamSpec *spec, SongPage *page) {
+	if (!gtk_revealer_get_reveal_child(shelf) && !gtk_revealer_get_child_revealed(shelf))
+		gtk_box_remove(GTK_BOX(page->cards), GTK_WIDGET(shelf));
+}
+
+
+/* A shelf on a page that shows nothing yet is open from the start, with its cards rising in one after another */
+static GtkWidget *create_shelf(SongPage *page, Shelf *shelf, gboolean is_first) {
+	GtkWidget *section = gtk_box_new(GTK_ORIENTATION_VERTICAL, 12);
+	gtk_box_append(GTK_BOX(section), create_section_heading(shelf->title));
+	GtkWidget *rows = gtk_stack_new();
+	gtk_stack_set_transition_type(GTK_STACK(rows), GTK_STACK_TRANSITION_TYPE_CROSSFADE);
+	gtk_stack_set_transition_duration(GTK_STACK(rows), SHELF_MOTION_MILLISECONDS);
+	g_signal_connect(rows, "notify::transition-running", G_CALLBACK(drop_hidden_rows), NULL);
+	gtk_box_append(GTK_BOX(section), rows);
+	GtkWidget *widget = gtk_revealer_new();
+	gtk_revealer_set_transition_type(GTK_REVEALER(widget), GTK_REVEALER_TRANSITION_TYPE_SLIDE_DOWN);
+	gtk_revealer_set_transition_duration(GTK_REVEALER(widget), SHELF_MOTION_MILLISECONDS);
+	gtk_revealer_set_reveal_child(GTK_REVEALER(widget), is_first);
+	gtk_revealer_set_child(GTK_REVEALER(widget), section);
+	g_object_set_data_full(G_OBJECT(widget), SHELF_TITLE_KEY, g_strdup(shelf->title), g_free);
+	g_object_set_data(G_OBJECT(widget), SHELF_ROWS_KEY, rows);
+	g_signal_connect(widget, "notify::child-revealed", G_CALLBACK(drop_closed_shelf), page);
+	fill_shelf(page, widget, shelf, is_first);
+	return widget;
+}
+
+
+/* The shelf with the title that this refresh has not matched to a shelf yet, or NULL for a new one */
+static GtkWidget *find_shelf(SongPage *page, const char *title, GHashTable *matched) {
+	for (GtkWidget *widget = gtk_widget_get_first_child(page->cards); widget;
+		widget = gtk_widget_get_next_sibling(widget)) {
+		if (g_strcmp0(g_object_get_data(G_OBJECT(widget), SHELF_TITLE_KEY), title) == 0
+			&& !g_hash_table_contains(matched, widget))
+			return widget;
+	}
+	return NULL;
+}
+
+
+void set_song_page_shelves(SongPage *page, GPtrArray *shelves) {
+	gboolean is_first = gtk_widget_get_first_child(page->cards) == NULL;
+	g_autoptr(GHashTable) matched = g_hash_table_new(NULL, NULL);
+	GtkWidget *previous = NULL;
+	for (guint index = 0; index < shelves->len; index++) {
+		Shelf *shelf = g_ptr_array_index(shelves, index);
+		if (!shelf->cards->len)
+			continue;
+		GtkWidget *widget = find_shelf(page, shelf->title, matched);
+		if (widget) {
+			fill_shelf(page, widget, shelf, FALSE);
+			gtk_box_reorder_child_after(GTK_BOX(page->cards), widget, previous);
+		} else {
+			widget = create_shelf(page, shelf, is_first);
+			gtk_box_insert_child_after(GTK_BOX(page->cards), widget, previous);
+		}
+		gtk_revealer_set_reveal_child(GTK_REVEALER(widget), TRUE);
+		g_hash_table_add(matched, widget);
+		previous = widget;
+	}
+	/* A shelf off screen shuts at once and leaves the page, so the next one is found before closing it */
+	GtkWidget *next = NULL;
+	for (GtkWidget *widget = gtk_widget_get_first_child(page->cards); widget; widget = next) {
+		next = gtk_widget_get_next_sibling(widget);
+		if (g_object_get_data(G_OBJECT(widget), SHELF_TITLE_KEY) && !g_hash_table_contains(matched, widget))
+			gtk_revealer_set_reveal_child(GTK_REVEALER(widget), FALSE);
+	}
 }
 
 

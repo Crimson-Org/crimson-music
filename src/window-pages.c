@@ -202,7 +202,7 @@ static void play_history_song(Window *window, const char *id) {
 }
 
 
-static void show_home_heading(Window *window, SongPage *page);
+static void open_home(Window *window);
 
 
 void open_card(const char *id, gpointer data) {
@@ -222,17 +222,13 @@ void open_card(const char *id, gpointer data) {
 		adw_navigation_view_pop_to_page(ADW_NAVIGATION_VIEW(window->navigation), open);
 		return;
 	}
+	if (g_str_equal(id, HOME_TAG)) {
+		open_home(window);
+		return;
+	}
 	/* The page slides in at once with placeholders, and its heading, cards and songs follow when they arrive */
 	show_waiting(window, id);
 	gboolean is_artist = g_str_has_prefix(id, ARTIST_PREFIX);
-	if (g_str_equal(id, HOME_TAG)) {
-		SongPage *home = push_song_page(window, id, TEXT_HOME, FALSE);
-		set_song_page_profile(home);
-		show_home_heading(window, home);
-		set_song_page_waits_for_cards(home, TRUE);
-		request_home(window->engine);
-		return;
-	}
 	SongPage *page = push_song_page(window, id, "", !is_artist);
 	set_song_page_heading(page, "", "", NULL, is_artist);
 	set_song_page_waits_for_cards(page, is_artist);
@@ -554,27 +550,22 @@ static void receive_account_photo(Window *window, JSCValue *message) {
 
 
 /* Songs played lately lead Home, newest first, after a card for the page that lists them all */
-static void add_history_cards(Window *window, SongPage *page, JSCValue *message) {
-	g_autoptr(JSCValue) array = jsc_value_object_get_property(message, "history");
-	g_autoptr(GPtrArray) songs = read_songs(array);
-	if (!window->history)
-		window->history = g_list_store_new(CRIMSON_TYPE_SONG);
-	g_list_store_splice(window->history, 0, g_list_model_get_n_items(G_LIST_MODEL(window->history)), songs->pdata,
-		songs->len);
-	g_free(window->history_id);
-	window->history_id = read_text(message, "historyId");
+static Shelf *create_history_shelf(Home *home) {
+	Shelf *shelf = g_new0(Shelf, 1);
+	shelf->title = g_strdup(TEXT_HISTORY);
+	shelf->cards = g_ptr_array_new_with_free_func(free_card);
+	GPtrArray *songs = home->history;
 	if (!songs->len)
-		return;
-	g_autoptr(GPtrArray) cards = g_ptr_array_new_with_free_func(free_card);
+		return shelf;
 	Card *all = g_new0(Card, 1);
-	all->id = g_strdup(window->history_id);
+	all->id = g_strdup(home->history_id);
 	all->title = g_strdup(TEXT_FULL_HISTORY);
 	all->subtitle = g_strdup_printf(songs->len == 1 ? TEXT_SONG_COUNT_ONE : TEXT_SONG_COUNT, songs->len);
 	all->artwork = g_strdup(HISTORY_ARTWORK);
-	g_ptr_array_add(cards, all);
+	g_ptr_array_add(shelf->cards, all);
 	/* A song played twice lately shows once, and plays from its newest play */
 	g_autoptr(GHashTable) seen = g_hash_table_new(g_str_hash, g_str_equal);
-	for (guint index = 0; index < songs->len && cards->len <= HISTORY_CARD_LIMIT; index++) {
+	for (guint index = 0; index < songs->len && shelf->cards->len <= HISTORY_CARD_LIMIT; index++) {
 		CrimsonSong *song = g_ptr_array_index(songs, index);
 		if (!g_hash_table_add(seen, song->id))
 			continue;
@@ -584,35 +575,63 @@ static void add_history_cards(Window *window, SongPage *page, JSCValue *message)
 		card->subtitle = g_strdup(song->artist);
 		card->artwork = g_strdup(song->artwork);
 		card->video_id = g_strdup(song->id);
-		g_ptr_array_add(cards, card);
+		g_ptr_array_add(shelf->cards, card);
 	}
-	add_song_page_cards(page, TEXT_HISTORY, cards, FALSE, FALSE);
+	return shelf;
 }
 
 
-/* Home is shelves of cards, as YouTube Music shows them, above the songs it picks for the listener */
-static void add_home_shelves(Window *window, SongPage *page, JSCValue *message) {
-	add_history_cards(window, page, message);
-	g_autoptr(JSCValue) sections = jsc_value_object_get_property(message, "sections");
-	g_autoptr(JSCValue) length = jsc_value_object_get_property(sections, "length");
-	for (guint index = 0; jsc_value_is_array(sections) && index < (guint)jsc_value_to_int32(length); index++) {
-		g_autoptr(JSCValue) section = jsc_value_object_get_property_at_index(sections, index);
-		g_autofree char *title = read_text(section, "title");
-		g_autoptr(JSCValue) round = jsc_value_object_get_property(section, "round");
-		add_cards(page, section, "cards", title, jsc_value_to_boolean(round));
-	}
+/* Home is shelves of cards, as YouTube Music shows them, above the songs it picks for the listener, and a fresh
+ * answer changes only the shelves and songs that differ from what is shown */
+static void show_home(Window *window, SongPage *page) {
+	Home *home = window->home;
+	if (!window->history)
+		window->history = g_list_store_new(CRIMSON_TYPE_SONG);
+	update_song_store(window->history, home->history);
+	g_set_str(&window->history_id, home->history_id);
+	g_autoptr(Shelf) history = create_history_shelf(home);
+	g_autoptr(GPtrArray) shelves = g_ptr_array_new();
+	g_ptr_array_add(shelves, history);
+	g_ptr_array_extend(shelves, home->shelves, NULL, NULL);
+	set_song_page_shelves(page, shelves);
 	set_song_page_waits_for_cards(page, FALSE);
-	g_autoptr(GListModel) songs = create_song_store(message);
-	set_song_page_songs(page, songs, FALSE, FALSE);
+	GListStore *songs = G_LIST_STORE(get_song_page_songs(page));
+	if (!songs) {
+		g_autoptr(GListStore) store = g_list_store_new(CRIMSON_TYPE_SONG);
+		set_song_page_songs(page, G_LIST_MODEL(store), FALSE, FALSE);
+		songs = store;
+	}
+	update_song_store(songs, home->songs);
 	update_song_page(page, TRUE);
+}
+
+
+/* Home opens with what it showed last, even from an earlier session, while YouTube is asked for it afresh, and
+ * only waits with placeholders when nothing was ever shown */
+static void open_home(Window *window) {
+	SongPage *page = push_song_page(window, HOME_TAG, TEXT_HOME, FALSE);
+	set_song_page_profile(page);
+	show_home_heading(window, page);
+	if (!window->home)
+		window->home = load_cached_home();
+	if (window->home) {
+		show_home(window, page);
+	} else {
+		show_waiting(window, HOME_TAG);
+		set_song_page_waits_for_cards(page, TRUE);
+	}
+	request_home(window->engine);
 }
 
 
 /* The waiting ends only once the shelves are in, since a page without songs at that point counts as not found */
 static void fill_home(Window *window, JSCValue *message) {
+	g_clear_pointer(&window->home, free_home);
+	window->home = read_home(message);
+	save_cached_home(window->home);
 	SongPage *page = find_song_page(window, HOME_TAG);
-	if (page && !get_song_page_songs(page))
-		add_home_shelves(window, page, message);
+	if (page)
+		show_home(window, page);
 	if (g_strcmp0(HOME_TAG, window->waiting_card_id) == 0)
 		stop_waiting(window);
 }
