@@ -497,6 +497,23 @@ static void fetch_about(Window *window, const char *id, const char *artist, cons
 }
 
 
+/* The subtitle of the card Home shows with the id, or NULL when Home shows no such card, which works before Home
+ * was opened too, such as for a pinned mix */
+static const char *find_home_subtitle(Window *window, const char *id) {
+	if (!window->home)
+		window->home = load_cached_home();
+	for (guint shelf = 0; window->home && shelf < window->home->shelves->len; shelf++) {
+		GPtrArray *cards = ((Shelf *)g_ptr_array_index(window->home->shelves, shelf))->cards;
+		for (guint index = 0; index < cards->len; index++) {
+			Card *card = g_ptr_array_index(cards, index);
+			if (g_str_equal(card->id, id))
+				return card->subtitle;
+		}
+	}
+	return NULL;
+}
+
+
 /* The page already slid in with placeholders, so it fills in where it is, or not at all once it was left */
 static void fill_collection(Window *window, JSCValue *message, gboolean is_artist) {
 	g_autofree char *id = read_text(message, "id");
@@ -511,9 +528,11 @@ static void fill_collection(Window *window, JSCValue *message, gboolean is_artis
 	g_autofree char *artwork = read_text(message, "artwork");
 	AdwNavigationPage *navigation_page = adw_navigation_view_find_page(ADW_NAVIGATION_VIEW(window->navigation), id);
 	adw_navigation_page_set_title(navigation_page, title);
-	set_song_page_heading(page, title, detail, artwork, is_artist);
-	set_song_page_pin(page, id, title, artwork);
 	g_autofree char *album_artist = read_text(message, "artist");
+	/* A mix YouTube made names no artist in its header, while its card on Home names the artists in it */
+	const char *subtitle = is_artist || *album_artist ? NULL : find_home_subtitle(window, id);
+	set_song_page_heading(page, title, subtitle && *subtitle ? subtitle : detail, artwork, is_artist);
+	set_song_page_pin(page, id, title, artwork);
 	if (is_artist)
 		fetch_about(window, id, title, NULL);
 	else
