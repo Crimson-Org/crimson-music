@@ -591,12 +591,7 @@ static void add_history_cards(Window *window, SongPage *page, JSCValue *message)
 
 
 /* Home is shelves of cards, as YouTube Music shows them, above the songs it picks for the listener */
-static void fill_home(Window *window, JSCValue *message) {
-	SongPage *page = find_song_page(window, HOME_TAG);
-	if (g_strcmp0(HOME_TAG, window->waiting_card_id) == 0)
-		stop_waiting(window);
-	if (!page || get_song_page_songs(page))
-		return;
+static void add_home_shelves(Window *window, SongPage *page, JSCValue *message) {
 	add_history_cards(window, page, message);
 	g_autoptr(JSCValue) sections = jsc_value_object_get_property(message, "sections");
 	g_autoptr(JSCValue) length = jsc_value_object_get_property(sections, "length");
@@ -610,6 +605,16 @@ static void fill_home(Window *window, JSCValue *message) {
 	g_autoptr(GListModel) songs = create_song_store(message);
 	set_song_page_songs(page, songs, FALSE, FALSE);
 	update_song_page(page, TRUE);
+}
+
+
+/* The waiting ends only once the shelves are in, since a page without songs at that point counts as not found */
+static void fill_home(Window *window, JSCValue *message) {
+	SongPage *page = find_song_page(window, HOME_TAG);
+	if (page && !get_song_page_songs(page))
+		add_home_shelves(window, page, message);
+	if (g_strcmp0(HOME_TAG, window->waiting_card_id) == 0)
+		stop_waiting(window);
 }
 
 

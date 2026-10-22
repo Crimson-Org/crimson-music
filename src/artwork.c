@@ -18,7 +18,9 @@
 
 #define ARTWORK_FOLDER "artwork"
 #define ADDRESS_KEY "artwork-address"
-#define LOADED_CLASS "loaded"
+/* A cover waiting for its picture breathes like the waiting shapes of a page, then its picture fades in over it */
+#define WAITING_CLASS "bone"
+#define APPEAR_MILLISECONDS 300
 /* Covers kept decoded in memory, which at 120 pixels is about 60 KB each */
 #define MEMORY_LIMIT 600
 /* Google sizes its covers through the address, so every cover is asked for at one size that suits both lists
@@ -75,8 +77,11 @@ struct _CrimsonCover {
 	/* The picture drawn for a tilted cover and the screen scale it was drawn at */
 	GdkTexture *tilted;
 	int tilted_scale;
-	/* The song has no picture at all, such as a local file without one, so a music note stands in */
+	/* The song has no picture, or its picture failed to load, so a music note stands in */
 	gboolean is_blank;
+	/* How far the picture has faded in over the waiting shape, from 0 to 1 */
+	double appear;
+	AdwAnimation *appearing;
 	/* The drawn emblem the cover shows instead of a picture, or NULL */
 	const Emblem *emblem;
 };
@@ -224,7 +229,7 @@ static void draw_emblem(GtkWidget *widget, GtkSnapshot *snapshot, const Emblem *
 }
 
 
-static void draw_cover(GtkWidget *widget, GtkSnapshot *snapshot) {
+static void draw_picture(GtkWidget *widget, GtkSnapshot *snapshot) {
 	CrimsonCover *cover = CRIMSON_COVER(widget);
 	if (cover->emblem) {
 		draw_emblem(widget, snapshot, cover->emblem, (float)cover->size);
@@ -263,10 +268,18 @@ static void draw_cover(GtkWidget *widget, GtkSnapshot *snapshot) {
 }
 
 
+static void draw_cover(GtkWidget *widget, GtkSnapshot *snapshot) {
+	gtk_snapshot_push_opacity(snapshot, CRIMSON_COVER(widget)->appear);
+	draw_picture(widget, snapshot);
+	gtk_snapshot_pop(snapshot);
+}
+
+
 static void dispose_cover(GObject *object) {
 	g_clear_object(&CRIMSON_COVER(object)->texture);
 	g_clear_object(&CRIMSON_COVER(object)->tilted);
 	g_clear_object(&CRIMSON_COVER(object)->spinning);
+	g_clear_object(&CRIMSON_COVER(object)->appearing);
 	G_OBJECT_CLASS(crimson_cover_parent_class)->dispose(object);
 }
 
@@ -291,6 +304,7 @@ static void crimson_cover_class_init(CrimsonCoverClass *type) {
 
 static void crimson_cover_init(CrimsonCover *cover) {
 	cover->spin = 1;
+	cover->appear = 1;
 }
 
 
@@ -336,22 +350,49 @@ static void remember_texture(const char *address, GdkTexture *texture) {
 }
 
 
-/* A cover from memory arrives in the same frame the class was removed, so only a waited for cover fades */
+static void set_appear(double value, gpointer data) {
+	CrimsonCover *cover = data;
+	cover->appear = value;
+	gtk_widget_queue_draw(GTK_WIDGET(cover));
+}
+
+
+/* The waiting shape stays behind the picture until the picture covers it fully */
+static void finish_appearing(CrimsonCover *cover) {
+	gtk_widget_remove_css_class(GTK_WIDGET(cover), WAITING_CLASS);
+}
+
+
+static void stop_appearing(CrimsonCover *cover) {
+	if (cover->appearing)
+		adw_animation_reset(cover->appearing);
+	cover->appear = 1;
+	finish_appearing(cover);
+}
+
+
+/* A waited for cover fades in its picture, or the music note when the picture never came */
 static void give_texture(CrimsonCover *cover, const char *address, GdkTexture *texture) {
 	if (g_strcmp0(g_object_get_data(G_OBJECT(cover), ADDRESS_KEY), address) != 0)
 		return;
 	set_cover_texture(cover, texture);
-	gtk_widget_add_css_class(GTK_WIDGET(cover), LOADED_CLASS);
+	cover->is_blank = texture == NULL;
+	if (!cover->appearing) {
+		AdwAnimationTarget *target = adw_callback_animation_target_new(set_appear, cover, NULL);
+		cover->appearing = adw_timed_animation_new(GTK_WIDGET(cover), 0, 1, APPEAR_MILLISECONDS, target);
+		adw_timed_animation_set_easing(ADW_TIMED_ANIMATION(cover->appearing), ADW_EASE_OUT_CUBIC);
+		g_signal_connect_swapped(cover->appearing, "done", G_CALLBACK(finish_appearing), cover);
+	}
+	adw_animation_play(cover->appearing);
 }
 
 
 static void finish_request(ArtworkRequest *request, GdkTexture *texture) {
 	g_hash_table_steal(requests, request->address);
-	if (texture) {
+	if (texture)
 		remember_texture(request->address, texture);
-		for (guint index = 0; index < request->covers->len; index++)
-			give_texture(g_ptr_array_index(request->covers, index), request->address, texture);
-	}
+	for (guint index = 0; index < request->covers->len; index++)
+		give_texture(g_ptr_array_index(request->covers, index), request->address, texture);
 	free_request(request);
 }
 
@@ -488,28 +529,24 @@ void show_artwork(GtkWidget *widget, const char *address) {
 		g_signal_connect_object(adw_style_manager_get_default(), "notify::accent-color",
 			G_CALLBACK(gtk_widget_queue_draw), cover, G_CONNECT_SWAPPED);
 	}
+	stop_appearing(cover);
 	if (cover->emblem) {
 		g_object_set_data(G_OBJECT(cover), ADDRESS_KEY, NULL);
 		set_cover_texture(cover, NULL);
-		gtk_widget_add_css_class(widget, LOADED_CLASS);
 		gtk_widget_queue_draw(widget);
 		return;
 	}
 	g_autofree char *sized = address && *address ? size_address(address, cover->resolution) : NULL;
 	g_object_set_data_full(G_OBJECT(cover), ADDRESS_KEY, g_strdup(sized), g_free);
-	set_cover_texture(cover, NULL);
-	gtk_widget_remove_css_class(widget, LOADED_CLASS);
 	cover->is_blank = address && !*address;
-	if (cover->is_blank)
-		gtk_widget_add_css_class(widget, LOADED_CLASS);
 	gtk_widget_queue_draw(widget);
-	if (!sized)
+	/* A cover kept in memory shows at once, with no waiting shape and no fade */
+	GdkTexture *texture = sized ? g_hash_table_lookup(textures, sized) : NULL;
+	set_cover_texture(cover, texture);
+	if (!sized || texture)
 		return;
-	GdkTexture *texture = g_hash_table_lookup(textures, sized);
-	if (texture) {
-		give_texture(cover, sized, texture);
-		return;
-	}
+	cover->appear = 0;
+	gtk_widget_add_css_class(widget, WAITING_CLASS);
 	ArtworkRequest *request = g_hash_table_lookup(requests, sized);
 	if (!request) {
 		request = g_new0(ArtworkRequest, 1);
