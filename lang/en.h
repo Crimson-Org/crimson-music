@@ -22,6 +22,11 @@
 #define TEXT_HOME_DETAIL "Mixes, picks and new releases YouTube Music chose for you"
 #define TEXT_HISTORY "History"
 #define TEXT_FULL_HISTORY "Full History"
+#define TEXT_DISCOVER "Discover"
+#define TEXT_DISCOVER_MIX "Discover Mix"
+/* The day a Discover Mix was kept, such as Oct 22, 2026, from the month's name, the day and the year */
+#define TEXT_MIX_DAY "%s %d, %d"
+#define TEXT_MONTHS "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
 #define TEXT_AUTOPLAY_VIDEO_DETAIL "A music video opens over the window by itself when it starts playing"
 #define TEXT_MUSIC_VIDEO "Music Video"
 #define TEXT_LOCAL_MEDIA "Local Media"

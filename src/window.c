@@ -2,6 +2,7 @@
 
 #include "../lang/en.h"
 #include "artwork.h"
+#include "discover.h"
 #include "common/key-store.h"
 #include "common/loading.h"
 #include "common/log.h"
@@ -458,6 +459,7 @@ static void sign_out(Window *window) {
 	load_local_playlists_into(window);
 	clear_cache();
 	g_clear_pointer(&window->home, free_home);
+	forget_discover_mixes();
 	update_sidebar(window);
 	sign_out_engine(window->engine);
 }

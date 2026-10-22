@@ -155,6 +155,8 @@ void free_home(Home *home) {
 	g_ptr_array_unref(home->history);
 	g_ptr_array_unref(home->shelves);
 	g_ptr_array_unref(home->songs);
+	g_clear_pointer(&home->discover, free_card);
+	g_clear_pointer(&home->discover_songs, g_ptr_array_unref);
 	g_free(home);
 }
 
@@ -271,6 +273,12 @@ Home *read_home(JSCValue *message) {
 	home->history = read_songs(history);
 	home->shelves = read_array(shelves, create_read_shelf, free_shelf);
 	home->songs = read_songs(songs);
+	g_autoptr(JSCValue) discover = jsc_value_object_get_property(message, "discover");
+	if (jsc_value_is_object(discover)) {
+		g_autoptr(JSCValue) discover_songs = jsc_value_object_get_property(discover, "songs");
+		home->discover = create_read_card(discover);
+		home->discover_songs = read_songs(discover_songs);
+	}
 	return home;
 }
 
@@ -305,6 +313,19 @@ static gpointer create_described(GType type, GVariant *tuple, const Shape *shape
 	gpointer object = g_object_new(type, NULL);
 	fill_described(object, tuple, shape);
 	return object;
+}
+
+
+GBytes *save_song_bytes(CrimsonSong *song) {
+	g_autoptr(GVariant) value = g_variant_ref_sink(describe_object(song, &SONG_SHAPE));
+	return g_variant_get_data_as_bytes(value);
+}
+
+
+CrimsonSong *load_song_bytes(GBytes *bytes) {
+	g_autoptr(GVariant) value = g_variant_ref_sink(g_variant_new_from_bytes(G_VARIANT_TYPE(SONG_SHAPE.tuple), bytes,
+		FALSE));
+	return create_described(CRIMSON_TYPE_SONG, value, &SONG_SHAPE);
 }
 
 

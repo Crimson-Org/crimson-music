@@ -65,6 +65,9 @@ G_DEFINE_AUTOPTR_CLEANUP_FUNC(Shelf, free_shelf)
 typedef struct {
 	char *history_id;
 	GPtrArray *history, *shelves, *songs;
+	/* The Discover Mix as it is now with its songs, which only a fresh answer brings */
+	Card *discover;
+	GPtrArray *discover_songs;
 } Home;
 
 void free_home(Home *home);
@@ -83,6 +86,9 @@ GPtrArray *read_playlists(JSCValue *array);
 GPtrArray *read_songs(JSCValue *array);
 GPtrArray *read_cards(JSCValue *array);
 Home *read_home(JSCValue *message);
+/* A song as bytes to store, and back */
+GBytes *save_song_bytes(CrimsonSong *song);
+CrimsonSong *load_song_bytes(GBytes *bytes);
 
 /* Songs the account dislikes, as YouTube last said with a song or as a dislike made here since */
 gboolean is_video_disliked(const char *video_id);

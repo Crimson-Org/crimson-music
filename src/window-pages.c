@@ -6,6 +6,7 @@
 #include "comments-page.h"
 #include "common/startup.h"
 #include "collage.h"
+#include "discover.h"
 #include "dynamic.h"
 #include "info-dialog.h"
 #include "lastfm.h"
@@ -203,6 +204,7 @@ static void play_history_song(Window *window, const char *id) {
 
 
 static void open_home(Window *window);
+static void open_discover_mix(Window *window, const char *id);
 
 
 void open_card(const char *id, gpointer data) {
@@ -224,6 +226,10 @@ void open_card(const char *id, gpointer data) {
 	}
 	if (g_str_equal(id, HOME_TAG)) {
 		open_home(window);
+		return;
+	}
+	if (g_str_has_prefix(id, DISCOVER_MIX_PREFIX)) {
+		open_discover_mix(window, id);
 		return;
 	}
 	/* The page slides in at once with placeholders, and its heading, cards and songs follow when they arrive */
@@ -624,10 +630,37 @@ static void open_home(Window *window) {
 }
 
 
+/* The Discover Mix leads Home with the mixes kept before it, since YouTube shows only the mix it has now */
+static Shelf *create_discover_shelf(Home *home) {
+	Shelf *shelf = g_new0(Shelf, 1);
+	shelf->title = g_strdup(TEXT_DISCOVER);
+	shelf->cards = keep_discover_mix(home->discover_songs, home->discover->artwork);
+	g_ptr_array_insert(shelf->cards, 0, copy_card(home->discover));
+	return shelf;
+}
+
+
+/* A kept Discover Mix opens like an album, straight from what was kept of it */
+static void open_discover_mix(Window *window, const char *id) {
+	g_autofree char *detail = NULL;
+	g_autofree char *artwork = NULL;
+	g_autoptr(GPtrArray) songs = load_discover_mix(id, &detail, &artwork);
+	SongPage *page = push_song_page(window, id, TEXT_DISCOVER_MIX, TRUE);
+	set_song_page_heading(page, TEXT_DISCOVER_MIX, detail, artwork, FALSE);
+	set_song_page_pin(page, id, TEXT_DISCOVER_MIX, artwork);
+	g_autoptr(GListStore) store = g_list_store_new(CRIMSON_TYPE_SONG);
+	g_list_store_splice(store, 0, 0, songs->pdata, songs->len);
+	set_song_page_songs(page, G_LIST_MODEL(store), FALSE, FALSE);
+	update_song_page(page, TRUE);
+}
+
+
 /* The waiting ends only once the shelves are in, since a page without songs at that point counts as not found */
 static void fill_home(Window *window, JSCValue *message) {
 	g_clear_pointer(&window->home, free_home);
 	window->home = read_home(message);
+	if (window->home->discover)
+		g_ptr_array_insert(window->home->shelves, 0, create_discover_shelf(window->home));
 	save_cached_home(window->home);
 	SongPage *page = find_song_page(window, HOME_TAG);
 	if (page)

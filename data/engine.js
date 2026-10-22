@@ -18,12 +18,9 @@
 	const HOME_ID = 'FEmusic_home'
 	const DISCOVER_MIX_TITLE = 'Discover Mix'
 	const DISCOVER_MIX_KEY = 'crimson-discover-mix'
-	const DISCOVER_TITLE = 'Discover'
 	const HISTORY_ID = 'FEmusic_history'
 	const HISTORY_TITLE = 'History'
 	const HISTORY_DETAIL = 'Songs you played lately'
-	const DISCOVER_WEEKS_KEY = 'crimson-discover-weeks'
-	const DISCOVER_WEEK_PREFIX = 'discover-week:'
 	// Home is read this many pages deep
 	const HOME_PAGE_LIMIT = 8
 	const COMMENTS_CLIENT = {clientName: 'WEB', clientVersion: '2.20250101.00.00'}
@@ -285,38 +282,10 @@
 	}
 
 
-	// YouTube refills the one Discover Mix with new songs each week, so each new set of songs is kept as a week of its
-	// own, which Home shows after the current mix, newest first. Its songs are the first page of the mix
-	async function keepDiscoverWeek(mix) {
-		const response = await browse({browseId: mix.id})
-		const songs = (findKey(response, 'musicPlaylistShelfRenderer')?.contents ?? []).map(readSong).filter(Boolean)
-		if (!songs.length)
-			return
-		const weeks = readStored(DISCOVER_WEEKS_KEY, [])
-		// The same songs in another order are the same mix
-		const signature = songs.map(song => song.id).sort().join(' ')
-		if (weeks[0]?.signature === signature || weeks[0]?.signature.split(' ').sort().join(' ') === signature)
-			return
-		weeks.unshift({date: new Date().toISOString(), signature, artwork: mix.artwork, songs})
-		store(DISCOVER_WEEKS_KEY, weeks)
-	}
-
-
-	const describeDay = date => new Date(date).toLocaleDateString(undefined, {day: 'numeric', month: 'short', year: 'numeric'})
-
-
-	// YouTube can change the mix more than once a day, so mixes from the same day are numbered from the first one
-	function describeWeek(week, weeks = readStored(DISCOVER_WEEKS_KEY, [])) {
-		const day = describeDay(week.date)
-		const sameDay = weeks.filter(item => describeDay(item.date) === day).reverse()
-		return sameDay.length > 1 ? `${day} #${sameDay.indexOf(week) + 1}` : day
-	}
-
-
 	// YouTube Music features the Discover Mix on Home only now and then, though the mix itself stays, so it is
-	// remembered whenever Home shows it, taken from its shelf and always put first with the weeks kept before. The
-	// page's storage goes with the sign in, so another account never sees it
-	async function keepDiscoverMix(sections) {
+	// remembered whenever Home shows it and sent apart from the shelves with the first page of the songs it has now,
+	// which the app keeps as a mix of its own. The page's storage goes with the sign in, so another account never sees it
+	async function takeDiscoverMix(sections) {
 		let mix
 		for (const section of sections) {
 			const index = section.cards.findIndex(card => card.title === DISCOVER_MIX_TITLE)
@@ -332,18 +301,10 @@
 				sections.splice(index, 1)
 		}
 		if (!mix)
-			return []
-		await keepDiscoverWeek(mix).catch(() => {})
-		// The newest week holds the songs the mix has now, so only the ones before it show beside the mix
-		const weeks = readStored(DISCOVER_WEEKS_KEY, [])
-		const older = weeks.slice(1).map(week => ({
-			id: `${DISCOVER_WEEK_PREFIX}${week.date}`,
-			kind: '',
-			title: DISCOVER_MIX_TITLE,
-			subtitle: describeWeek(week, weeks),
-			artwork: week.artwork,
-		}))
-		return [{title: DISCOVER_TITLE, cards: [mix, ...older], round: false}]
+			return null
+		const response = await browse({browseId: mix.id}).catch(() => null)
+		const songs = (findKey(response, 'musicPlaylistShelfRenderer')?.contents ?? []).map(readSong).filter(Boolean)
+		return {...mix, songs}
 	}
 
 
@@ -359,15 +320,6 @@
 		const songs = await loadHistorySongs().catch(() => [])
 		send({type: 'album', id, title: HISTORY_TITLE, detail: HISTORY_DETAIL, artist: '',
 			artwork: songs[0]?.artwork ?? '', songs})
-	}
-
-
-	// A kept week opens like an album, from the songs stored for it
-	function loadDiscoverWeek(id) {
-		const weeks = readStored(DISCOVER_WEEKS_KEY, [])
-		const week = weeks.find(item => `${DISCOVER_WEEK_PREFIX}${item.date}` === id)
-		send({type: 'album', id, title: DISCOVER_MIX_TITLE, detail: week ? describeWeek(week, weeks) : '', artist: '',
-			artwork: week?.artwork ?? '', songs: week?.songs ?? []})
 	}
 
 
@@ -392,9 +344,9 @@
 				const continuation = findContinuation(list?.continuations)
 				page = continuation && await browse({}, continuation)
 			}
-			sections.unshift(...await keepDiscoverMix(sections))
+			const discover = await takeDiscoverMix(sections)
 			send({type: 'home', id: HOME_ID, sections, songs: [...songs.values()], history: await history,
-				historyId: HISTORY_ID})
+				historyId: HISTORY_ID, discover})
 		} catch (error) {
 			send({type: 'error', message: String(error)})
 		}
@@ -572,8 +524,6 @@
 
 	// Album tracks carry no covers or album names of their own, so they take the album's
 	async function loadAlbum(id) {
-		if (id.startsWith(DISCOVER_WEEK_PREFIX))
-			return loadDiscoverWeek(id)
 		if (id === HISTORY_ID)
 			return loadHistory(id)
 		try {
