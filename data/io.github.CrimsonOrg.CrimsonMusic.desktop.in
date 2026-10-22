@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Crimson Music
+Comment=Play your YouTube Music playlists
+Exec=@EXEC@
+Icon=io.github.CrimsonOrg.CrimsonMusic
+Terminal=false
+Categories=AudioVideo;Audio;Player;GTK;
+Keywords=youtube;music;player;playlist;
+StartupNotify=true
+SingleMainWindow=true

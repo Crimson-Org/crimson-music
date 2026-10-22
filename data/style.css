@@ -1,0 +1,977 @@
+cover {
+	opacity: 0;
+	transition: opacity 300ms ease-out;
+}
+
+cover.loaded {
+	opacity: 1;
+}
+
+@keyframes slide-in {
+	from {
+		opacity: 0;
+		transform: translateX(-16px);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+@keyframes slide-up {
+	from {
+		opacity: 0;
+		transform: translateY(24px);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+.song-details.entering {
+	animation: slide-in 350ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.song-list.entering {
+	animation: slide-up 400ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.song-list {
+	padding: 12px;
+}
+
+/* The row's padding sits inside the song, so right clicks, drags and drops land anywhere on the row */
+.song-list > row {
+	padding: 0;
+	border-radius: 10px;
+	transition: background-color 150ms ease-out;
+}
+
+.song-list > row > revealer > .song {
+	padding: 6px 12px;
+}
+
+.playing-icon {
+	opacity: 0;
+	color: white;
+	background-color: alpha(black, 0.45);
+	border-radius: 6px;
+	transition: opacity 250ms ease-out;
+}
+
+.song.playing .playing-icon,
+.card-button.playing .playing-icon {
+	opacity: 1;
+}
+
+.song .song-title {
+	transition: color 250ms ease-out;
+}
+
+.song.playing .song-title {
+	color: var(--accent-color);
+	font-weight: bold;
+}
+
+.player-bar {
+	padding: 10px 16px 6px;
+}
+
+/* Every control is a true circle of the same size, and the inner button of the volume and chapters follows */
+.control,
+.control > button {
+	min-width: 36px;
+	min-height: 36px;
+	padding: 0;
+	border-radius: 9999px;
+}
+
+.play-button {
+	min-width: 48px;
+	min-height: 48px;
+}
+
+.play-button spinner {
+	color: var(--accent-fg-color);
+}
+
+/* The circle is drawn on what a control holds, so it shrinks on a press while the button keeps its whole area and a
+ * click released near its edge still counts */
+button.control,
+button.control:hover,
+button.control:active,
+button.control:checked,
+button.control:checked:hover,
+.control > button,
+.control > button:hover,
+.control > button:active,
+.control > button:checked {
+	background: none;
+}
+
+button.control > *,
+.control > button > * {
+	min-width: 36px;
+	min-height: 36px;
+	border-radius: 9999px;
+	transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1), background-color 150ms ease-out;
+}
+
+.play-button > * {
+	min-width: 48px;
+	min-height: 48px;
+}
+
+.play-button:active > * {
+	transform: scale(0.92);
+}
+
+/* The smaller buttons shrink further while pressed, so the press shows on a small circle too */
+button.control:not(.play-button):active > *,
+.control > button:active > * {
+	transform: scale(0.82);
+}
+
+.play-button > * {
+	background-color: var(--accent-bg-color);
+}
+
+.play-button:hover > * {
+	background-color: color-mix(in srgb, var(--accent-bg-color), currentColor 10%);
+}
+
+/* A filled circle stays visible on any cover, where a coloured icon alone could match the backdrop */
+.control:checked {
+	color: var(--accent-fg-color);
+}
+
+.control:checked > * {
+	background-color: var(--accent-bg-color);
+}
+
+/* The top bar stays near black in both styles, as in Crimson Code */
+headerbar.top-bar {
+	background-color: #030303;
+	color: #f2f2f4;
+	box-shadow: none;
+}
+
+.page-veil {
+	border-bottom: 1px solid var(--border-color);
+}
+
+.page-heading {
+	padding: 32px 24px 24px;
+}
+
+.page-body {
+	padding: 24px;
+}
+
+.page-search {
+	margin: 16px 24px 0;
+}
+
+.section-heading {
+	margin-top: 6px;
+}
+
+.page-heading.entering {
+	animation: slide-in 350ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Matches the round window buttons beside it */
+.top-bar .minimize-button {
+	min-width: 24px;
+	min-height: 24px;
+	padding: 0;
+	border-radius: 9999px;
+	background-color: alpha(currentColor, 0.1);
+}
+
+.top-bar .minimize-button:hover {
+	background-color: alpha(currentColor, 0.15);
+}
+
+.card-button {
+	padding: 6px;
+	border-radius: 12px;
+}
+
+.card-button label {
+	font-weight: normal;
+}
+
+.card-button label.card-title {
+	font-weight: 600;
+}
+
+.card-button label.card-detail {
+	opacity: 0.55;
+}
+
+.top-search {
+	min-width: 220px;
+}
+
+.song.drop-target {
+	box-shadow: inset 0 2px var(--accent-bg-color);
+}
+
+/* Song rows line up with the section headings above them */
+.page-body .song-list {
+	padding: 0;
+	margin: 0 -12px;
+}
+
+/* The invisible button right click menus open from takes no room */
+.menu-anchor,
+.menu-anchor > button {
+	min-width: 0;
+	min-height: 0;
+	padding: 0;
+}
+
+/* Room under the cards for the sideways scrollbar, which would otherwise cover their text */
+.card-row {
+	padding-bottom: 14px;
+}
+
+.link-label:hover {
+	text-decoration-line: underline;
+}
+
+@keyframes cover-in {
+	from {
+		opacity: 0;
+		transform: scale(0.8) translateY(12px);
+	}
+	to {
+		opacity: 1;
+		transform: none;
+	}
+}
+
+cover.heading-cover.entering:not(.round) {
+	animation: cover-in 500ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.top-spinner {
+	margin: 0 6px;
+	min-width: 18px;
+	min-height: 18px;
+}
+
+/* The small round buttons on song rows, drawn as the theme's flat round buttons */
+row-action {
+	min-width: 34px;
+	min-height: 34px;
+	padding: 0;
+	border-radius: 9999px;
+	transition: background-color 150ms ease-out;
+}
+
+row-action:hover {
+	background-color: alpha(currentColor, 0.07);
+}
+
+row-action:active {
+	background-color: alpha(currentColor, 0.16);
+}
+
+row-action:focus-visible {
+	outline: 2px solid alpha(var(--accent-color), 0.5);
+	outline-offset: -2px;
+}
+
+/* A heart shows on the row under the pointer, counting the row's padding around the song, and stays on songs
+ * already liked */
+.song .like-button,
+.song .love-button {
+	opacity: 0;
+	transition: opacity 150ms ease-out;
+}
+
+row:hover > revealer > .song .like-button,
+.song:hover .like-button,
+.song .like-button:focus-visible,
+row:hover > revealer > .song .love-button,
+.song:hover .love-button,
+.song .love-button:focus-visible,
+.love-button.loved,
+.like-button.liked,
+.like-button.disliked {
+	opacity: 1;
+}
+
+.like-button.liked {
+	color: var(--accent-color);
+}
+
+/* In Liked Music every song is liked, so the hearts only show under the pointer */
+.song-list.quiet-likes row:not(:hover) > revealer > .song .like-button.liked {
+	opacity: 0;
+}
+
+.card-button .playing-icon {
+	-gtk-icon-size: 32px;
+	border-radius: 6px;
+}
+
+.card-button.playing .card-title {
+	color: var(--accent-color);
+}
+
+/* Pins sit under their own heading, set apart from the playlists by a line */
+/* Sidebar sections stand apart by a line fading out at both ends */
+.section-gap {
+	min-height: 1px;
+	margin: 8px 18px;
+	background-image: linear-gradient(to right, transparent, alpha(currentColor, 0.18), transparent);
+}
+
+.pin-heading .section-gap {
+	margin: 0 6px 6px;
+}
+
+.pin-heading {
+	margin: 12px 12px 0;
+}
+
+.pin-heading label {
+	margin-left: 6px;
+}
+
+/* A playlist's whole pill highlights while something is held over it, to show it takes the drop, in place of the
+ * outline GTK draws around the row's contents */
+/* Home sits right above the YouTube playlists as if in the same list */
+.home-list {
+	padding-bottom: 0;
+}
+
+.home-list + .navigation-sidebar {
+	padding-top: 0;
+}
+
+.navigation-sidebar row.drop-target {
+	background-color: alpha(var(--accent-bg-color), 0.25);
+}
+
+.navigation-sidebar row :drop(active) {
+	box-shadow: none;
+	outline: none;
+}
+
+/* Tags the listener gave a song, each removed by a click */
+.tag-chips {
+	padding: 6px;
+}
+
+.tag-chip {
+	border-radius: 999px;
+	padding: 2px 10px;
+}
+
+
+/* Dynamic and local playlists carry a small badge on the corner of their cover */
+.cover-badge {
+	-gtk-icon-size: 10px;
+	padding: 2px;
+	margin: -3px;
+	border-radius: 999px;
+	background-color: var(--accent-bg-color);
+	color: var(--accent-fg-color);
+	box-shadow: 0 0 0 2px var(--sidebar-bg-color);
+}
+
+/* The editor's chips: plain, included in the accent colour, or left out in red and struck through */
+.filter-chip {
+	border-radius: 999px;
+	padding: 4px 12px;
+	font-weight: normal;
+}
+
+.filter-chip .chip-count {
+	opacity: 0.55;
+	font-size: smaller;
+	font-feature-settings: "tnum";
+}
+
+.filter-chip.included {
+	background-color: var(--accent-bg-color);
+	color: var(--accent-fg-color);
+}
+
+.filter-chip.excluded {
+	background-color: alpha(var(--destructive-bg-color), 0.25);
+	color: var(--destructive-color);
+}
+
+.filter-chip.excluded label:not(.chip-count) {
+	text-decoration: line-through;
+}
+
+.filters {
+	margin: 18px 12px 24px;
+}
+
+.filter-help {
+	padding: 10px 14px;
+	border-radius: 12px;
+	background-color: alpha(var(--accent-bg-color), 0.12);
+}
+
+.preview-pane {
+	background-color: var(--sidebar-bg-color);
+	border-left: 1px solid var(--border-color);
+}
+
+.preview-heading {
+	padding: 18px 18px 12px;
+}
+
+.preview-list {
+	background: none;
+	padding: 0 6px 12px;
+}
+
+.preview-song {
+	padding: 4px 6px;
+}
+
+/* The chapter list: a heading, then numbered chapters with their start times, where the one playing shows the
+ * playing icon and the accent colour */
+popover.chapters > contents {
+	padding: 6px 4px 6px 6px;
+}
+
+.chapter-heading {
+	font-weight: bold;
+	padding: 6px 12px 10px;
+}
+
+.chapter-list {
+	background: none;
+}
+
+.chapter-list row {
+	border-radius: 8px;
+	margin: 0 6px 2px 0;
+}
+
+.chapter {
+	padding: 8px 10px;
+}
+
+.chapter-number {
+	opacity: 0.45;
+	font-feature-settings: "tnum";
+	font-size: smaller;
+}
+
+.chapter-time {
+	opacity: 0.55;
+	font-feature-settings: "tnum";
+}
+
+.chapter-list row.current .chapter-title,
+.chapter-list row.current .chapter-playing {
+	color: var(--accent-color);
+	font-weight: bold;
+}
+
+.description {
+	padding: 12px;
+}
+
+/* Last.fm's own red, so a missing connection is hard to miss, breathing softly while the browser waits */
+.lastfm-reminder > button {
+	color: #d51007;
+	background-color: alpha(#d51007, 0.14);
+}
+
+.lastfm-reminder > button:hover {
+	background-color: alpha(#d51007, 0.24);
+}
+
+.lastfm-panel {
+	padding: 6px;
+}
+
+.lastfm-reminder.waiting > button {
+	animation: lastfm-waiting 1.6s ease-in-out infinite;
+}
+
+@keyframes lastfm-waiting {
+	50% {
+		opacity: 0.45;
+	}
+}
+
+/* A Last.fm love is a heart in a warm red, apart from the thumb of a YouTube Music like */
+.love-button.loved {
+	color: #e5484d;
+}
+
+/* With song colours off, the player bar matches the top bar */
+ambience.plain {
+	background-color: var(--headerbar-bg-color);
+}
+
+/* Waiting pages show soft shapes in their own layout, breathing one after another like a wave */
+.skeleton {
+	padding: 24px;
+}
+
+.bone {
+	border-radius: 8px;
+	background-color: alpha(currentColor, 0.08);
+	animation: breathe 1.6s ease-in-out infinite;
+}
+
+.bone-row {
+	padding: 6px 12px;
+}
+
+@keyframes breathe {
+	50% {
+		background-color: alpha(currentColor, 0.16);
+	}
+}
+
+.wave-1 { animation-delay: 120ms; }
+.wave-2 { animation-delay: 240ms; }
+.wave-3 { animation-delay: 360ms; }
+.wave-4 { animation-delay: 480ms; }
+.wave-5 { animation-delay: 600ms; }
+
+/* Cards rise into place one shortly after another */
+@keyframes card-rise {
+	from {
+		opacity: 0;
+		transform: translateY(18px) scale(0.96);
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+.card-in.entering {
+	animation: card-rise 480ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.stagger-1.entering { animation-delay: 35ms; }
+.stagger-2.entering { animation-delay: 70ms; }
+.stagger-3.entering { animation-delay: 105ms; }
+.stagger-4.entering { animation-delay: 140ms; }
+.stagger-5.entering { animation-delay: 175ms; }
+.stagger-6.entering { animation-delay: 210ms; }
+.stagger-7.entering { animation-delay: 245ms; }
+.stagger-8.entering { animation-delay: 280ms; }
+.stagger-9.entering { animation-delay: 315ms; }
+
+/* The controls, cover and words of the player keep a soft dark backing, so they stay clear over the moving colours
+ * behind them */
+button.control:not(.suggested-action):not(:checked) > *,
+.control > button > * {
+	background-color: alpha(black, 0.28);
+}
+
+button.control:not(.suggested-action):not(:checked):hover > *,
+.control > button:hover > * {
+	background-color: alpha(black, 0.4);
+}
+
+/* The moving colours redraw the labels with every frame, and a blurred shadow would be blurred again each time */
+.player-bar label {
+	text-shadow: 0 1px alpha(black, 0.9);
+}
+
+.player-bar scale trough {
+	background-color: alpha(black, 0.35);
+}
+
+/* The Information dialog: a header with the cover, small fact tiles, chips of tags and short texts that open */
+.info-page {
+	padding: 18px 18px 24px;
+}
+
+.info-heading {
+	font-weight: bold;
+	font-size: smaller;
+	opacity: 0.7;
+}
+
+.info-pill {
+	padding: 2px 10px;
+	border-radius: 999px;
+	background-color: alpha(currentColor, 0.1);
+	font-size: smaller;
+	font-feature-settings: "tnum";
+}
+
+.info-pill.explicit {
+	background-color: alpha(currentColor, 0.2);
+	font-weight: bold;
+}
+
+.info-pill.loved {
+	background-color: alpha(#e5484d, 0.2);
+	color: #e5484d;
+}
+
+.info-fact {
+	min-width: 140px;
+	padding: 8px 12px;
+	border-radius: 10px;
+	background-color: alpha(currentColor, 0.06);
+}
+
+.info-fact-value {
+	font-weight: 600;
+	font-feature-settings: "tnum";
+}
+
+.info-chip {
+	padding: 3px 11px;
+	border-radius: 999px;
+	font-size: smaller;
+	background-color: alpha(currentColor, 0.08);
+}
+
+.info-chip.genre {
+	background-color: alpha(var(--accent-bg-color), 0.25);
+}
+
+.info-chip.mood {
+	background-color: alpha(#8a6cf0, 0.22);
+}
+
+.info-chip.lastfm {
+	background-color: alpha(#d51007, 0.18);
+}
+
+.info-text {
+	line-height: 1.35;
+}
+
+.info-more {
+	padding: 2px 6px;
+	min-height: 0;
+	font-size: smaller;
+}
+
+.info-link {
+	padding: 4px 14px;
+	border-radius: 999px;
+	font-size: smaller;
+}
+
+/* The song the player's title led to lights up and fades back, so the eye finds it in the list */
+@keyframes spotlight {
+	from {
+		background-color: alpha(var(--accent-bg-color), 0.45);
+	}
+	to {
+		background-color: alpha(var(--accent-bg-color), 0.12);
+	}
+}
+
+.song.spotlight {
+	border-radius: 10px;
+	animation: spotlight 2.2s ease-out;
+	background-color: alpha(var(--accent-bg-color), 0.12);
+}
+
+/* The upcoming covers fan out like a hand of cards with the next song in front, and spread wider and lift when
+ * the pointer comes near or their list is open */
+.upcoming {
+	padding: 0 4px;
+}
+
+/* The covers are the control, so the button under them shows no hover or press */
+.upcoming > button,
+.upcoming > button:hover,
+.upcoming > button:active,
+.upcoming > button:checked {
+	background: none;
+}
+
+.upcoming-cover {
+	margin-bottom: 4px;
+	border-radius: 5px;
+	box-shadow: 0 2px 6px alpha(black, 0.6);
+	transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease-out;
+}
+
+.upcoming-cover.card-0 {
+	transform: rotate(-6deg);
+}
+
+.upcoming-cover.card-1 {
+	transform: rotate(4deg) translateY(-1px);
+	opacity: 0.85;
+}
+
+.upcoming-cover.card-2 {
+	transform: rotate(12deg) translateY(1px);
+	opacity: 0.65;
+}
+
+.upcoming:hover .upcoming-cover.card-0,
+.upcoming > button:checked .upcoming-cover.card-0 {
+	transform: rotate(-10deg) translate(-4px, -4px) scale(1.08);
+}
+
+.upcoming:hover .upcoming-cover.card-1,
+.upcoming > button:checked .upcoming-cover.card-1 {
+	transform: rotate(4deg) translate(2px, -3px);
+	opacity: 1;
+}
+
+.upcoming:hover .upcoming-cover.card-2,
+.upcoming > button:checked .upcoming-cover.card-2 {
+	transform: rotate(18deg) translate(8px, 0);
+	opacity: 0.9;
+}
+
+.upcoming-count {
+	font-size: 9px;
+	font-weight: bold;
+	padding: 0 4px;
+	border-radius: 999px;
+	background-color: var(--accent-bg-color);
+	color: var(--accent-fg-color);
+	box-shadow: 0 1px 3px alpha(black, 0.5);
+}
+
+.queue-divide {
+	margin: 8px 12px;
+}
+
+.chapter-list row:selected {
+	background-color: alpha(var(--accent-bg-color), 0.25);
+	color: inherit;
+}
+
+/* One highlight while a song is held over the fan, in place of GTK's own drop outlines */
+.upcoming:drop(active),
+.upcoming > button:drop(active) {
+	outline: none;
+	box-shadow: none;
+}
+
+.upcoming.drop-target > button {
+	background-color: alpha(var(--accent-bg-color), 0.3);
+}
+
+/* The fan moves when it changes: forward a place when its front song starts playing, a card dealt onto the front
+ * when a song is queued, and a fresh fan otherwise, each card a moment after the one before */
+@keyframes fan-forward {
+	from {
+		transform: translateX(12px);
+		opacity: 0.6;
+	}
+	to {
+		transform: none;
+		opacity: 1;
+	}
+}
+
+@keyframes fan-deal {
+	from {
+		transform: translate(-10px, -26px) rotate(-30deg) scale(1.2);
+		opacity: 0;
+	}
+	to {
+		transform: none;
+		opacity: 1;
+	}
+}
+
+@keyframes fan-shift-back {
+	from {
+		transform: translateX(-12px);
+	}
+	to {
+		transform: none;
+	}
+}
+
+@keyframes fan-fresh {
+	from {
+		transform: scale(0.6);
+		opacity: 0;
+	}
+	to {
+		transform: none;
+		opacity: 1;
+	}
+}
+
+.fan-forward.entering {
+	animation: fan-forward 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.fan-deal.fan-delay-0.entering {
+	animation: fan-deal 480ms cubic-bezier(0.22, 1.3, 0.36, 1) both;
+}
+
+.fan-deal.entering:not(.fan-delay-0) {
+	animation: fan-shift-back 360ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.fan-fresh.entering {
+	animation: fan-fresh 420ms cubic-bezier(0.22, 1.2, 0.36, 1) both;
+}
+
+.fan-delay-1.entering {
+	animation-delay: 50ms;
+}
+
+.fan-delay-2.entering {
+	animation-delay: 100ms;
+}
+
+.chapter-list .chapter.drop-target {
+	box-shadow: inset 0 2px var(--accent-bg-color);
+}
+
+/* The suggestions after a playlist's songs start under a heading of their own */
+.suggestions-heading {
+	margin: 18px 12px 6px;
+}
+
+/* The playlist on screen glows at its edge while a song held over it can be dropped in, as an outline so the
+ * heading and list drawn inside never cover it */
+.view.drop-target {
+	outline: 2px solid var(--accent-bg-color);
+	outline-offset: -2px;
+}
+
+/* The player keeps the raised edge it had as a bottom bar */
+.player-edge > * {
+	box-shadow: 0 -1px var(--border-color);
+}
+
+.playlists-spinner {
+	min-height: 24px;
+	margin: 12px;
+}
+
+/* The signed out row is exactly as tall as the spinner it replaces */
+.sign-in-row {
+	min-height: 48px;
+	padding: 0 12px 0 18px;
+}
+
+.sign-in-row > button.small {
+	padding: 2px 12px;
+	min-height: 26px;
+}
+
+/* The Last.fm text beside a heading sits apart from the title, a little softer */
+.page-about {
+	margin-left: 12px;
+}
+
+.page-about > label:first-child {
+	opacity: 0.85;
+}
+
+/* An artist's title and buttons sit over their picture, kept readable by a soft shadow */
+.page-heading.over-picture .title-1 {
+	text-shadow: 0 1px 12px alpha(black, 0.65), 0 1px 3px alpha(black, 0.5);
+}
+
+.page-heading.over-picture button.pill {
+	box-shadow: 0 3px 14px alpha(black, 0.4);
+}
+
+.page-about {
+	transition: opacity 400ms ease-out;
+}
+
+.page-about.waiting {
+	opacity: 0;
+}
+
+/* A heading's title fades in when it arrives, and its buttons ease between waiting and ready */
+.page-heading .title-1 {
+	transition: opacity 400ms ease-out;
+}
+
+.page-heading .title-1.waiting {
+	opacity: 0;
+}
+
+.page-heading button.pill {
+	transition: opacity 400ms ease-out, background-color 400ms ease-out, color 400ms ease-out;
+}
+
+
+/* Lyrics read as a column of centred lines, larger than the lists around them */
+/* The music video stays black until the page shows the video alone, then fades in */
+.video-cover {
+	transition: background-color 200ms ease-out;
+}
+
+.video-backing {
+	background-color: #000;
+}
+
+.video-cover.covering {
+	background-color: #000;
+	transition: none;
+}
+
+/* The comments panel stands apart from the middle of the window by a line at its left */
+.comments {
+	background-color: var(--view-bg-color);
+	box-shadow: inset 1px 0 var(--border-color);
+}
+
+.comments-title {
+	margin: 12px 16px 6px;
+}
+
+.comment {
+	padding: 10px 16px;
+}
+
+.reply-button {
+	margin: 0 0 4px 10px;
+	font-size: 0.9em;
+}
+
+.lyrics {
+	padding: 48px 24px;
+}
+
+.lyric-lines {
+	margin: 24px 0;
+}
+
+/* Each timed line is a label of its own, apart by margins, dimmed until it is sung */
+.lyric-line {
+	font-size: 1.4em;
+	font-weight: bold;
+	margin: 6px 0;
+	opacity: 0.35;
+	transition: opacity 300ms ease-out;
+}
+
+.lyric-line:hover {
+	opacity: 0.6;
+}
+
+.lyric-line.current,
+.lyric-line.plain {
+	opacity: 1;
+}
+
+/* An empty line between verses keeps them apart without lighting anything */
+.lyric-gap {
+	margin: 6px 0;
+}

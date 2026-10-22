@@ -1,0 +1,18 @@
+name: Nightly build
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  nightly:
+    uses: Crimson-Org/crimson-core/.github/workflows/nightly.yml@main
+    with:
+      title: Crimson Music
+      packages: gtk4-devel libadwaita-devel webkitgtk4-devel libsoup-devel sqlite3-devel gstreamer-devel gstreamer-plugins-base-devel
+      arch-packages: gtk4 libadwaita webkitgtk-6.0 libsoup3 sqlite gstreamer gst-plugins-base gst-plugins-good
+    secrets: inherit

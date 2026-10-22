@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+	<id>io.github.CrimsonOrg.CrimsonMusic</id>
+	<name>Crimson Music</name>
+	<summary>Play your YouTube Music playlists</summary>
+	<metadata_license>CC0-1.0</metadata_license>
+	<project_license>LicenseRef-proprietary</project_license>
+	<description>
+		<p>A player for YouTube Music with a sidebar of your playlists and the songs in each one.</p>
+	</description>
+	<developer id="io.github.CrimsonOrg">
+		<name>Crimson</name>
+	</developer>
+	<releases>
+		<release version="0.1.0" date="2026-10-20"/>
+	</releases>
+	<launchable type="desktop-id">io.github.CrimsonOrg.CrimsonMusic.desktop</launchable>
+	<provides>
+		<binary>crimson-music</binary>
+	</provides>
+	<content_rating type="oars-1.1"/>
+</component>

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gresources>
+	<gresource prefix="/io/github/CrimsonOrg/CrimsonMusic">
+		<file>style.css</file>
+		<file>engine.js</file>
+		<file>song-info.js</file>
+		<file>ad-pruner.js</file>
+		<file>blocklist.json</file>
+		<file alias="common.css">../subprojects/crimson-core/data/common.css</file>
+		<file>icons/scalable/apps/io.github.CrimsonOrg.CrimsonMusic.svg</file>
+		<file>icons/symbolic/apps/io.github.CrimsonOrg.CrimsonMusic-symbolic.svg</file>
+		<file>icons/scalable/actions/crimson-heart-symbolic.svg</file>
+		<file>icons/scalable/actions/crimson-heart-filled-symbolic.svg</file>
+		<file>icons/scalable/actions/crimson-like-symbolic.svg</file>
+		<file>icons/scalable/actions/crimson-comments-symbolic.svg</file>
+		<file>icons/scalable/actions/crimson-video-symbolic.svg</file>
+		<file>icons/scalable/actions/crimson-like-filled-symbolic.svg</file>
+		<file>icons/scalable/actions/crimson-dislike-symbolic.svg</file>
+		<file>icons/scalable/actions/crimson-dislike-filled-symbolic.svg</file>
+		<file>icons/scalable/actions/crimson-dynamic-symbolic.svg</file>
+		<file>icons/scalable/actions/crimson-lastfm-off-symbolic.svg</file>
+	</gresource>
+</gresources>
