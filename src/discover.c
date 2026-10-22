@@ -7,16 +7,15 @@
 #define DATABASE_FILE "discover.db"
 /* A song is stored once however many mixes hold it, and each mix keeps the order of its songs */
 #define SCHEMA "CREATE TABLE IF NOT EXISTS mixes " \
-	"(id INTEGER PRIMARY KEY, made TEXT, artwork TEXT, signature TEXT UNIQUE);" \
+	"(id INTEGER PRIMARY KEY, made TEXT, artwork TEXT, subtitle TEXT, signature TEXT UNIQUE);" \
 	"CREATE TABLE IF NOT EXISTS songs (id TEXT PRIMARY KEY, song BLOB);" \
 	"CREATE TABLE IF NOT EXISTS mix_songs (mix INTEGER, position INTEGER, song TEXT, PRIMARY KEY (mix, position))"
-static const char *const MONTHS[] = {TEXT_MONTHS};
 
 /* A kept mix with the words its card shows under the title */
 typedef struct {
 	gint64 id;
 	char *made, *artwork, *signature, *detail;
-	/* Which mix of its day it is, counting from the first */
+	/* Which mix with this subtitle it is, counting from the first */
 	guint number;
 } Mix;
 
@@ -68,15 +67,17 @@ static char *sign_songs(GPtrArray *songs) {
 }
 
 
-static void store_mix(GPtrArray *songs, const char *artwork, const char *signature) {
+static void store_mix(GPtrArray *songs, const Card *card, const char *signature) {
 	g_autoptr(GDateTime) now = g_date_time_new_now_utc();
 	g_autofree char *made = g_date_time_format_iso8601(now);
 	sqlite3_exec(database, "BEGIN", NULL, NULL, NULL);
 	sqlite3_stmt *mix = NULL;
-	sqlite3_prepare_v2(database, "INSERT INTO mixes (made, artwork, signature) VALUES (?, ?, ?)", -1, &mix, NULL);
+	sqlite3_prepare_v2(database, "INSERT INTO mixes (made, artwork, subtitle, signature) VALUES (?, ?, ?, ?)", -1,
+		&mix, NULL);
 	sqlite3_bind_text(mix, 1, made, -1, SQLITE_TRANSIENT);
-	sqlite3_bind_text(mix, 2, artwork, -1, SQLITE_TRANSIENT);
-	sqlite3_bind_text(mix, 3, signature, -1, SQLITE_TRANSIENT);
+	sqlite3_bind_text(mix, 2, card->artwork, -1, SQLITE_TRANSIENT);
+	sqlite3_bind_text(mix, 3, card->subtitle, -1, SQLITE_TRANSIENT);
+	sqlite3_bind_text(mix, 4, signature, -1, SQLITE_TRANSIENT);
 	sqlite3_step(mix);
 	sqlite3_finalize(mix);
 	gint64 id = sqlite3_last_insert_rowid(database);
@@ -114,30 +115,28 @@ static gboolean has_mix(const char *signature) {
 }
 
 
-/* Every kept mix, oldest first, named by its day, and numbered from the first of that day when a day has several */
+/* Every kept mix, oldest first, under the subtitle YouTube gave it, numbered from the first when several share one */
 static GPtrArray *list_mixes(void) {
 	GPtrArray *mixes = g_ptr_array_new_with_free_func(free_mix);
-	g_autoptr(GHashTable) per_day = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
+	g_autoptr(GHashTable) counts = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
 	sqlite3_stmt *row = NULL;
-	sqlite3_prepare_v2(database, "SELECT id, made, artwork, signature FROM mixes ORDER BY made", -1, &row, NULL);
+	sqlite3_prepare_v2(database, "SELECT id, made, artwork, signature, subtitle FROM mixes ORDER BY made", -1, &row,
+		NULL);
 	while (row && sqlite3_step(row) == SQLITE_ROW) {
 		Mix *mix = g_new0(Mix, 1);
 		mix->id = sqlite3_column_int64(row, 0);
 		mix->made = g_strdup(read_column(row, 1));
 		mix->artwork = g_strdup(read_column(row, 2));
 		mix->signature = g_strdup(read_column(row, 3));
-		g_autoptr(GDateTime) made = g_date_time_new_from_iso8601(mix->made, NULL);
-		g_autoptr(GDateTime) local = made ? g_date_time_to_local(made) : NULL;
-		mix->detail = local ? g_strdup_printf(TEXT_MIX_DAY, MONTHS[g_date_time_get_month(local) - 1],
-			g_date_time_get_day_of_month(local), g_date_time_get_year(local)) : g_strdup("");
-		mix->number = GPOINTER_TO_UINT(g_hash_table_lookup(per_day, mix->detail)) + 1;
-		g_hash_table_insert(per_day, g_strdup(mix->detail), GUINT_TO_POINTER(mix->number));
+		mix->detail = g_strdup(read_column(row, 4));
+		mix->number = GPOINTER_TO_UINT(g_hash_table_lookup(counts, mix->detail)) + 1;
+		g_hash_table_insert(counts, g_strdup(mix->detail), GUINT_TO_POINTER(mix->number));
 		g_ptr_array_add(mixes, mix);
 	}
 	sqlite3_finalize(row);
 	for (guint index = 0; index < mixes->len; index++) {
 		Mix *mix = g_ptr_array_index(mixes, index);
-		if (GPOINTER_TO_UINT(g_hash_table_lookup(per_day, mix->detail)) < 2)
+		if (GPOINTER_TO_UINT(g_hash_table_lookup(counts, mix->detail)) < 2)
 			continue;
 		char *numbered = g_strdup_printf("%s #%u", mix->detail, mix->number);
 		g_free(mix->detail);
@@ -147,27 +146,36 @@ static GPtrArray *list_mixes(void) {
 }
 
 
-GPtrArray *keep_discover_mix(GPtrArray *songs, const char *artwork) {
+static Card *create_mix_card(Mix *mix) {
+	Card *card = g_new0(Card, 1);
+	card->id = g_strdup_printf("%s%" G_GINT64_FORMAT, DISCOVER_MIX_PREFIX, mix->id);
+	card->title = g_strdup(TEXT_DISCOVER_MIX);
+	card->subtitle = g_strdup(mix->detail);
+	card->artwork = g_strdup(mix->artwork);
+	return card;
+}
+
+
+GPtrArray *keep_discover_mix(GPtrArray *songs, const Card *card) {
 	GPtrArray *cards = g_ptr_array_new_with_free_func(free_card);
-	if (!open_database())
-		return cards;
 	g_autofree char *signature = songs->len ? sign_songs(songs) : NULL;
-	if (signature && !has_mix(signature))
-		store_mix(songs, artwork, signature);
-	g_autoptr(GPtrArray) mixes = list_mixes();
-	/* Without the songs the mix has now, the newest kept mix stands for it */
-	Mix *newest = mixes->len ? g_ptr_array_index(mixes, mixes->len - 1) : NULL;
-	const char *current = signature ? signature : newest ? newest->signature : "";
+	if (signature && open_database() && !has_mix(signature))
+		store_mix(songs, card, signature);
+	g_autoptr(GPtrArray) mixes = open_database() ? list_mixes() : g_ptr_array_new();
+	/* Without any kept mix YouTube's own card stands for the mix */
+	if (!mixes->len) {
+		g_ptr_array_add(cards, copy_card(card));
+		return cards;
+	}
+	/* The mix it has now leads, and without its songs the newest kept mix stands for it */
+	Mix *newest = g_ptr_array_index(mixes, mixes->len - 1);
+	const char *current = signature ? signature : newest->signature;
 	for (guint index = mixes->len; index > 0; index--) {
 		Mix *mix = g_ptr_array_index(mixes, index - 1);
 		if (g_str_equal(mix->signature, current))
-			continue;
-		Card *card = g_new0(Card, 1);
-		card->id = g_strdup_printf("%s%" G_GINT64_FORMAT, DISCOVER_MIX_PREFIX, mix->id);
-		card->title = g_strdup(TEXT_DISCOVER_MIX);
-		card->subtitle = g_strdup(mix->detail);
-		card->artwork = g_strdup(mix->artwork);
-		g_ptr_array_add(cards, card);
+			g_ptr_array_insert(cards, 0, create_mix_card(mix));
+		else
+			g_ptr_array_add(cards, create_mix_card(mix));
 	}
 	return cards;
 }

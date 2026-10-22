@@ -630,12 +630,11 @@ static void open_home(Window *window) {
 }
 
 
-/* The Discover Mix leads Home with the mixes kept before it, since YouTube shows only the mix it has now */
+/* The Discover Mix leads Home with every mix kept before it, since YouTube shows only the mix it has now */
 static Shelf *create_discover_shelf(Home *home) {
 	Shelf *shelf = g_new0(Shelf, 1);
 	shelf->title = g_strdup(TEXT_DISCOVER);
-	shelf->cards = keep_discover_mix(home->discover_songs, home->discover->artwork);
-	g_ptr_array_insert(shelf->cards, 0, copy_card(home->discover));
+	shelf->cards = keep_discover_mix(home->discover_songs, home->discover);
 	return shelf;
 }
 
