@@ -141,10 +141,8 @@ button.control:not(.play-button):active > *,
 	background-color: var(--accent-bg-color);
 }
 
-/* The top bar stays near black in both styles, as in Crimson Code */
-headerbar.top-bar {
-	background-color: #030303;
-	color: #f2f2f4;
+/* The title bar takes its colours from the Crimson theme of the light or dark style */
+headerbar.title-bar {
 	box-shadow: none;
 }
 
@@ -173,7 +171,7 @@ headerbar.top-bar {
 }
 
 /* Matches the round window buttons beside it */
-.top-bar .minimize-button {
+.title-bar .minimize-button {
 	min-width: 24px;
 	min-height: 24px;
 	padding: 0;
@@ -181,7 +179,7 @@ headerbar.top-bar {
 	background-color: alpha(currentColor, 0.1);
 }
 
-.top-bar .minimize-button:hover {
+.title-bar .minimize-button:hover {
 	background-color: alpha(currentColor, 0.15);
 }
 

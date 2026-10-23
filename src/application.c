@@ -2,6 +2,7 @@
 
 #include "../lang/en.h"
 #include "application.h"
+#include "common/themes.h"
 #include "dialogs.h"
 #include "settings-dialog.h"
 #include "settings.h"
@@ -71,6 +72,8 @@ static void start_up(GApplication *application) {
 	g_autofree char *icons = get_resource_path("icons");
 	gtk_icon_theme_add_resource_path(gtk_icon_theme_get_for_display(gdk_display_get_default()), icons);
 	apply_style();
+	/* Only the title bar follows the Crimson themes, so it turns light with the light style */
+	use_themes(DEFAULT_LIGHT_THEME, DEFAULT_DARK_THEME, THEME_TITLE_BAR);
 	for (guint index = 0; index < G_N_ELEMENTS(SHORTCUTS); index++)
 		gtk_application_set_accels_for_action(GTK_APPLICATION(application), SHORTCUTS[index].action,
 			SHORTCUTS[index].accelerators);

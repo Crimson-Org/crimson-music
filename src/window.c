@@ -790,7 +790,7 @@ static void go_back(GtkButton *button, Window *window) {
  * the sidebar folds away */
 static GtkWidget *create_top_bar(Window *window) {
 	GtkWidget *header = adw_header_bar_new();
-	gtk_widget_add_css_class(header, "top-bar");
+	gtk_widget_add_css_class(header, "title-bar");
 	GtkWidget *sidebar_button = gtk_toggle_button_new();
 	gtk_button_set_icon_name(GTK_BUTTON(sidebar_button), "sidebar-show-symbolic");
 	gtk_widget_set_tooltip_text(sidebar_button, TEXT_PLAYLISTS);
@@ -857,6 +857,7 @@ static GtkWidget *create_frame(Window *window) {
 	gtk_revealer_set_transition_duration(GTK_REVEALER(window->player_revealer), REVEAL_MILLISECONDS);
 	gtk_revealer_set_child(GTK_REVEALER(window->player_revealer), get_player_bar_widget(window->bar));
 	GtkWidget *toolbar = adw_toolbar_view_new();
+	gtk_widget_add_css_class(toolbar, "title-bar");
 	adw_toolbar_view_add_top_bar(ADW_TOOLBAR_VIEW(toolbar), create_top_bar(window));
 	/* The player sits under the content rather than in a bottom bar, since bars drag the whole window and that would
 	 * take over dragging the playing song to a playlist */
