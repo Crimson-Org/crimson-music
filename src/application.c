@@ -69,8 +69,6 @@ static void start_up(GApplication *application) {
 		{"app.quit", {"<Control>q", NULL}},
 	};
 	g_action_map_add_action_entries(G_ACTION_MAP(application), ENTRIES, G_N_ELEMENTS(ENTRIES), application);
-	g_autofree char *icons = get_resource_path("icons");
-	gtk_icon_theme_add_resource_path(gtk_icon_theme_get_for_display(gdk_display_get_default()), icons);
 	apply_style();
 	/* Only the title bar follows the Crimson themes, so it turns light with the light style */
 	use_themes(DEFAULT_LIGHT_THEME, DEFAULT_DARK_THEME, THEME_TITLE_BAR);
