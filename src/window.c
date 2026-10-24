@@ -950,6 +950,7 @@ static gboolean close_window(GtkWindow *gtk_window, Window *window) {
 	remember_scroll(window);
 	read_window_geometry(gtk_window, &window->state.geometry);
 	save_player_state(&window->state);
+	hide_closing_window(gtk_window);
 	return FALSE;
 }
 
