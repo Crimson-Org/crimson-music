@@ -6,7 +6,7 @@
 		<file>song-info.js</file>
 		<file>ad-pruner.js</file>
 		<file>blocklist.json</file>
-		<file alias="common.css">../subprojects/crimson-core/data/common.css</file>
+		<file alias="common.css">../subprojects/crimson-core/assets/common.css</file>
 		<file>icons/scalable/apps/io.github.CrimsonOrg.CrimsonMusic.svg</file>
 		<file>icons/symbolic/apps/io.github.CrimsonOrg.CrimsonMusic-symbolic.svg</file>
 		<file>icons/scalable/actions/crimson-heart-symbolic.svg</file>

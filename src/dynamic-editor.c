@@ -1,4 +1,4 @@
-#include "../lang/en.h"
+#include "lang/en.h"
 #include "artwork.h"
 #include "dialogs.h"
 #include "dynamic-editor.h"

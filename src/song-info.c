@@ -23,7 +23,7 @@
 #define OFFLINE_WAIT_MS 30000
 #define OFFLINE_WAIT_MAXIMUM_MS 600000
 
-/* The names data/song-info.js gives each field, in the order of InfoField, which are also the database columns */
+/* The names assets/song-info.js gives each field, in the order of InfoField, which are also the database columns */
 static const char *const FIELD_NAMES[INFO_FIELD_COUNT] = {
 	"title", "artist", "album", "seconds", "released", "uploaded", "bpm", "key", "gain", "isrc", "explicit", "label",
 	"genres", "tags", "tagSource", "styles", "lastfm", "views", "channel", "description", "chapters", "sources", "cover", "danceable", "energetic", "calm",

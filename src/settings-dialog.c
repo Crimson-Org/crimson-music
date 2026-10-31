@@ -1,6 +1,6 @@
 #include <adwaita.h>
 
-#include "../lang/en.h"
+#include "lang/en.h"
 #include "dialogs.h"
 #include "lastfm.h"
 #include "local-library.h"

@@ -1,6 +1,6 @@
 #include <string.h>
 
-#include "../lang/en.h"
+#include "lang/en.h"
 #include "artwork.h"
 #include "discover.h"
 #include "common/key-store.h"

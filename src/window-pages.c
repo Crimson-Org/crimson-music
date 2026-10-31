@@ -1,6 +1,6 @@
 #include <string.h>
 
-#include "../lang/en.h"
+#include "lang/en.h"
 #include "lyrics-page.h"
 #include "artwork.h"
 #include "comments-page.h"

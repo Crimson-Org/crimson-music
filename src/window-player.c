@@ -1,4 +1,4 @@
-#include "../lang/en.h"
+#include "lang/en.h"
 #include "common/log.h"
 #include "info-dialog.h"
 #include "last-song.h"

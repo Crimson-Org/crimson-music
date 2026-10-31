@@ -2,7 +2,7 @@
 #include <gst/pbutils/pbutils.h>
 #include <math.h>
 
-#include "../lang/en.h"
+#include "lang/en.h"
 #include "common/identity.h"
 #include "local-library.h"
 #include "settings.h"

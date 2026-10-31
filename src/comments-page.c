@@ -1,6 +1,6 @@
 #include <adwaita.h>
 
-#include "../lang/en.h"
+#include "lang/en.h"
 #include "common/smooth-scroll.h"
 #include "comments-page.h"
 

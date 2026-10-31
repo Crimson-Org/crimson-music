@@ -1,4 +1,4 @@
-#include "../lang/en.h"
+#include "lang/en.h"
 #include "sign-in.h"
 
 #define SIGN_IN_ADDRESS "https://accounts.google.com/ServiceLogin?service=youtube&continue=" \

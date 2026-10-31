@@ -3,7 +3,7 @@
 #include "library.h"
 
 /* What is known of a song, gathered from YouTube, Deezer, MusicBrainz and ReccoBeats, all kept as text the way
- * data/song-info.js gives it, with numbers as digits and lists joined by commas */
+ * assets/song-info.js gives it, with numbers as digits and lists joined by commas */
 typedef enum {
 	INFO_TITLE,
 	INFO_ARTIST,
@@ -46,7 +46,7 @@ typedef enum {
 
 typedef struct {
 	char *values[INFO_FIELD_COUNT];
-	/* The version of data/song-info.js that gathered it, so songs gathered by an older one are asked for again */
+	/* The version of assets/song-info.js that gathered it, so songs gathered by an older one are asked for again */
 	int version;
 } SongInfo;
 

@@ -1,6 +1,6 @@
 #include <sqlite3.h>
 
-#include "../lang/en.h"
+#include "lang/en.h"
 #include "common/identity.h"
 #include "discover.h"
 

@@ -1,4 +1,4 @@
-#include "../lang/en.h"
+#include "lang/en.h"
 #include "ambience.h"
 #include "artwork.h"
 #include "motion.h"

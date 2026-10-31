@@ -1,4 +1,4 @@
-#include "../lang/en.h"
+#include "lang/en.h"
 #include "artwork.h"
 #include "common/loading.h"
 #include "pins.h"
