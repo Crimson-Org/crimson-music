@@ -121,10 +121,10 @@ printf '==> %s\n' 'sh scripts/lastfm-keys.sh'
 sh scripts/lastfm-keys.sh
 printf '==> %s\n' 'glib-compile-resources --sourcedir assets --target build/resources.c --generate-source assets/crimson-music.gresource.xml'
 glib-compile-resources --sourcedir assets --target build/resources.c --generate-source assets/crimson-music.gresource.xml
-printf '==> %s\n' 'each src/*.c'
-crimson_each "src/*.c" "build/obj/{id}.o" "cc -std=${STD} \$WARN \$OPT \$DEFINES \$INCLUDES \$(pkg-config --cflags \$PKGS | sed \"s/-I/-isystem /g\") -c {from} -o {to}" "src/*.h src/lang/*.h build/lastfm-keys.h subprojects/crimson-core/src/common/*.h"
+printf '==> %s\n' 'each src/*.c src/app/*.c src/dynamic/*.c src/pages/*.c src/player/*.c src/sources/*.c src/visuals/*.c src/window/*.c'
+crimson_each "src/*.c src/app/*.c src/dynamic/*.c src/pages/*.c src/player/*.c src/sources/*.c src/visuals/*.c src/window/*.c" "build/obj/{id}.o" "cc -std=${STD} \$WARN \$OPT \$DEFINES \$INCLUDES \$(pkg-config --cflags \$PKGS | sed \"s/-I/-isystem /g\") -c {from} -o {to}" "src/*/*.h build/lastfm-keys.h subprojects/crimson-core/src/common/*.h"
 printf '==> %s\n' 'each subprojects/crimson-core/src/common/*.c'
-crimson_each "subprojects/crimson-core/src/common/*.c" "build/obj/{id}.o" "cc -std=${STD} \$WARN \$OPT \$DEFINES \$INCLUDES \$(pkg-config --cflags \$PKGS | sed \"s/-I/-isystem /g\") -c {from} -o {to}" "src/*.h src/lang/*.h subprojects/crimson-core/src/common/*.h"
+crimson_each "subprojects/crimson-core/src/common/*.c" "build/obj/{id}.o" "cc -std=${STD} \$WARN \$OPT \$DEFINES \$INCLUDES \$(pkg-config --cflags \$PKGS | sed \"s/-I/-isystem /g\") -c {from} -o {to}" "src/*/*.h subprojects/crimson-core/src/common/*.h"
 printf '==> %s\n' 'cc -std=gnu11 -O2 -g $(pkg-config --cflags gio-2.0) -c build/resources.c -o build/obj/resources.o'
 cc -std=gnu11 -O2 -g $(pkg-config --cflags gio-2.0) -c build/resources.c -o build/obj/resources.o
 printf '==> %s\n' 'glib-compile-resources --sourcedir subprojects/crimson-core/assets --target build/core-resources.c --generate-source subprojects/crimson-core/assets/crimson-core.gresource.xml'
