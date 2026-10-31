@@ -3,7 +3,7 @@
 </p>
 
 <h1 align="center">Crimson Music</h1>
-<p align="center">A native <a href="https://gnome.pages.gitlab.gnome.org/libadwaita/">libadwaita</a> music player for <a href="https://music.youtube.com">YouTube Music</a>.</p>
+<p align="center">A native <a href="https://gnome.pages.gitlab.gnome.org/libadwaita/">libadwaita</a> music player for <a href="https://music.youtube.com">YouTube Music</a> on Linux.</p>
 
 <p align="center">
   <a href="https://gtk.org">
@@ -28,61 +28,43 @@
 ## Why
 
 The YouTube Music website fills the screen with feeds, shelves and recommendations.\
-Crimson Music shows your playlists in a sidebar and the songs of the one you pick, and nothing else.
+Crimson Music shows your playlists in a sidebar and the songs of the one you pick, nothing else.
 
 ## About
 
 ### Your library
 
-Liked Music and every playlist you made or saved in YouTube Music, with their covers.\
-Your library from last time shows the moment the window opens, and updates in the background.\
-Window size, the open playlist, volume and shuffle are kept between launches.
+Your liked songs and playlists, with their covers, appear when the window opens.
 
-### Search, artists and albums
+### Search
 
-The search field in the middle of the top bar finds songs, artists and albums as you type, and Ctrl+F jumps to it.\
-Matching songs from your own playlists come first, and a click plays the song in its playlist.\
-Artist pages show the albums, singles, top songs and videos, and album pages list every track.\
-Videos play as music, with only their sound.\
-A right click on a song opens its artist or album, queues it next or adds it to a playlist.\
-The heart beside a song, or in the player bar, adds it to Liked Music or takes it out.
+Search your library and YouTube Music as you type, with your own playlists first.\
+Artist and album pages show all their releases.
 
-### Your playlists
+### Playlists
 
-Ctrl+N or New Playlist in the menu makes one in your YouTube Music library, and a right click renames or deletes it.\
-Songs in your own playlists move by dragging and leave with Remove from Playlist.\
-Drag playlists in the sidebar to put them in your own order.
+Create, rename and delete playlists, and drag songs and playlists to reorder them.
 
 ### Playing
 
-Click a song to play it and the rest of the playlist, in order or shuffled.\
-Ctrl+P plays and pauses, Ctrl+Left and Ctrl+Right skip, and Ctrl+S turns shuffle on and off.\
-In the player bar the title leads back to where the song plays from, the artist opens the artist and a right click opens the song menu.\
-The player bar takes on the colours of the playing cover, which drift slowly behind the controls under a fine film grain.\
-Settings, under Ctrl+comma, choose whether long songs resume where you left them and whether Crimson Music follows the system style or stays light or dark.
+Play playlists in order or shuffled, while the player bar takes on the colours of the cover.
 
-### Tray
+### No account needed
 
-The tray icon shows or hides the window, and its menu plays, pauses, skips and quits.\
-The minimize button sends the window to the tray.
-
-### Signing in
-
-Search and play without an account, and signing in adds your playlists and liked songs.\
-The first launch uses your [Pear Desktop](https://github.com/pear-devs/pear-desktop) account if one is found.
+Search and play without signing in, and sign in to add your playlists and liked songs.\
+The first launch uses your [Pear Desktop](https://github.com/pear-devs/pear-desktop) account if it finds one.
 
 ### Your own music
 
-The Local Media Library plays music from your Music folder, and Settings lets you choose other folders.
+The Local Media Library plays music from your Music folder, and Settings lets you pick other folders.
 
-### Fewer ads and trackers
+### Fewer ads
 
-Ad entries are removed from YouTube's player data before the player reads them.\
-Google's ad and analytics servers are blocked.
+Ads are removed, and Google's ad and tracking servers are blocked.
 
 ## Building
 
-You need a [C compiler](https://gcc.gnu.org/), [make](https://www.gnu.org/software/make/), [pkg-config](https://www.freedesktop.org/wiki/Software/pkg-config/) and the development files for [GTK4](https://gtk.org) 4.14, [libadwaita](https://gnome.pages.gitlab.gnome.org/libadwaita/) 1.8, [WebKitGTK](https://webkitgtk.org) 6.0, [libsoup](https://libsoup.gnome.org) 3 and [SQLite](https://sqlite.org).\
+You need a [C compiler](https://gcc.gnu.org/), [make](https://www.gnu.org/software/make/), [pkg-config](https://www.freedesktop.org/wiki/Software/pkg-config/) and the development files for [GTK4](https://gtk.org), [libadwaita](https://gnome.pages.gitlab.gnome.org/libadwaita/), [WebKitGTK](https://webkitgtk.org), [libsoup](https://libsoup.gnome.org) and [SQLite](https://sqlite.org).\
 On [openSUSE](https://www.opensuse.org/) these come from `sudo zypper install gcc make pkg-config gtk4-devel libadwaita-devel webkitgtk4-devel libsoup-devel sqlite3-devel`.
 
 Steps:
