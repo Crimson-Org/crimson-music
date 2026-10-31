@@ -52,7 +52,7 @@ Play playlists in order or shuffled, while the player bar takes on the colours o
 ### No account needed
 
 Search and play without signing in, and sign in to add your playlists and liked songs.\
-The first launch uses your [Pear Desktop](https://github.com/pear-devs/pear-desktop) account if it finds one.
+The first launch signs in with your [Pear Desktop](https://github.com/pear-devs/pear-desktop) account, if you have one.
 
 ### Your own music
 
@@ -71,4 +71,4 @@ Steps:
  1. Clone using `git clone --recurse-submodules https://github.com/Crimson-Org/crimson-music`
  2. Run `sh .crimson-build/install.sh`
 
-`sh .crimson-build/uninstall.sh` removes it again.
+`sh .crimson-build/uninstall.sh` uninstalls Crimson Music.
