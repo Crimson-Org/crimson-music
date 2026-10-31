@@ -19,7 +19,7 @@ void update_local_song_info(const char *id);
 gboolean is_local_song(const char *id);
 /* The files of a local song found in more than one format or copy, as their addresses, empty when there is one */
 GPtrArray *list_local_versions(const char *id);
-/* A version as its format and size, such as FLAC · 31.2 MB */
+/* A version as its format and size, such as FLAC - 31.2 MB */
 char *describe_local_version(const char *id);
 /* Shows this version of its song in the library from now on, while playlists keep the file they were given */
 void choose_local_version(const char *id);

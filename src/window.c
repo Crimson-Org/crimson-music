@@ -59,7 +59,7 @@ void show_message(Window *window, const char *text) {
 void update_top_title(Window *window) {
 	CrimsonSong *song = window->current_video ? get_queue_song(window->queue) : NULL;
 	g_autofree char *title = !song ? g_strdup(TEXT_APPLICATION_NAME) : *song->artist
-		? g_strdup_printf("%s · %s", song->title, song->artist) : g_strdup(song->title);
+		? g_strdup_printf("%s" TEXT_SEPARATOR "%s", song->title, song->artist) : g_strdup(song->title);
 	gtk_window_set_title(GTK_WINDOW(window->window), title);
 }
 

@@ -2,6 +2,7 @@
 #include <gst/pbutils/pbutils.h>
 #include <math.h>
 
+#include "../lang/en.h"
 #include "common/identity.h"
 #include "local-library.h"
 #include "settings.h"
@@ -289,7 +290,7 @@ char *describe_local_version(const char *id) {
 		const char *dot = strrchr(entry->path, '.');
 		g_autofree char *extension = g_ascii_strup(dot ? dot + 1 : "", -1);
 		g_autofree char *size = g_format_size((guint64)entry->size);
-		return g_strdup_printf("%s · %s", extension, size);
+		return g_strdup_printf("%s" TEXT_SEPARATOR "%s", extension, size);
 	}
 	return g_strdup("");
 }

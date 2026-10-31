@@ -278,7 +278,7 @@ static GPtrArray *find_library_songs(Window *window, const char *query) {
 			Card *card = g_new0(Card, 1);
 			card->id = g_strconcat(LIBRARY_PREFIX, playlist->id, "\n", song->id, NULL);
 			card->title = g_strdup(song->title);
-			card->subtitle = g_strdup_printf("%s · %s", song->artist, playlist->title);
+			card->subtitle = g_strdup_printf("%s" TEXT_SEPARATOR "%s", song->artist, playlist->title);
 			card->artwork = g_strdup(song->artwork);
 			card->video_id = g_strdup(song->id);
 			g_ptr_array_add(cards, card);
@@ -480,7 +480,7 @@ static void show_about(GHashTable *about, gpointer data) {
 		if (tags && *tags)
 			g_ptr_array_add(facts, g_strdup(tags));
 		g_ptr_array_add(facts, NULL);
-		g_autofree char *line = g_strjoinv(" · ", (char **)facts->pdata);
+		g_autofree char *line = g_strjoinv(TEXT_SEPARATOR, (char **)facts->pdata);
 		g_ptr_array_unref(facts);
 		set_song_page_about(page, g_hash_table_lookup(about, "summary"), line);
 	}

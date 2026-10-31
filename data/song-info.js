@@ -128,7 +128,7 @@ function readDescriptionChapters(description) {
 		const match = line.match(/(?:^|\s|\()((?:\d{1,2}:)?\d{1,2}:\d{2})(?:\)|\s|$)/)
 		if (!match)
 			continue
-		const title = line.replace(match[0], ' ').replace(/^[\s\d.\-–—|:)]+|[\s\-–—|:(]+$/g, '').trim()
+		const title = line.replace(match[0], ' ').replace(/^[\s\d.\-\u2013\u2014|:)]+|[\s\-\u2013\u2014|:(]+$/g, '').trim()
 		chapters.push({title: title || match[1], start: readSeconds(match[1])})
 	}
 	const isOrdered = chapters.every((chapter, index) => index === 0 || chapter.start > chapters[index - 1].start)
@@ -424,7 +424,7 @@ function readLastfmDetails(track, artist, similarTracks, similarArtists) {
 		artistPlays: singer?.stats?.playcount || '', artistYourPlays: singer?.stats?.userplaycount ?? '',
 		artistBio: plainWiki(singer?.bio?.summary),
 		similarTracks: [parse(similarTracks)?.similartracks?.track || []].flat()
-			.map(item => item.artist?.name + ' · ' + item.name).join('\n'),
+			.map(item => item.artist?.name + ' - ' + item.name).join('\n'),
 		similarArtists: [parse(similarArtists)?.similarartists?.artist || []].flat().map(item => item.name).join('\n'),
 	}
 }

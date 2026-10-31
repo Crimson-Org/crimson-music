@@ -129,7 +129,7 @@ static char *shorten_text(const char *text) {
 	if (is_cut) {
 		g_strchomp(shown->str);
 		g_string_set_size(shown, strlen(shown->str));
-		g_string_append(shown, "…");
+		g_string_append(shown, TEXT_CUT_OFF);
 	}
 	return g_string_free(g_steal_pointer(&shown), FALSE);
 }

@@ -10,6 +10,9 @@
 	// A song this close to the start counts as starting over
 	const START_SECONDS = 1
 	const ARTIST_PAGE = 'MUSIC_PAGE_TYPE_ARTIST'
+	// YouTube Music puts this between the artist and the rest of a subtitle
+	const SUBTITLE_SEPARATOR = ' \u2022 '
+	const DETAIL_SEPARATOR = ' - '
 	const ALBUM_PAGE = 'MUSIC_PAGE_TYPE_ALBUM'
 	// The browse ids of lyrics start this way
 	const LYRICS_PAGE = 'MPLYt'
@@ -203,7 +206,7 @@
 		return {
 			id,
 			title: readText(columns?.[0]),
-			artist: artists.length ? artists.map(run => run.text).join(', ') : readText(columns?.[1]).split(' • ')[0],
+			artist: artists.length ? artists.map(run => run.text).join(', ') : readText(columns?.[1]).split(SUBTITLE_SEPARATOR)[0],
 			artistId: listArtists(artists),
 			album: album?.text ?? '',
 			albumId: album?.navigationEndpoint.browseEndpoint.browseId ?? '',
@@ -225,7 +228,7 @@
 		return {
 			id,
 			title: readText(renderer.title),
-			artist: channel?.text ?? readText(renderer.subtitle).split(' • ')[0],
+			artist: channel?.text ?? readText(renderer.subtitle).split(SUBTITLE_SEPARATOR)[0],
 			artistId: channel?.navigationEndpoint.browseEndpoint.browseId ?? artistId,
 			album: '',
 			albumId: '',
@@ -547,7 +550,7 @@
 					albumId: id,
 					artwork: song.artwork || artwork,
 				})
-			const detail = [artist, readText(header?.subtitle)].filter(Boolean).join(' · ')
+			const detail = [artist, readText(header?.subtitle)].filter(Boolean).join(DETAIL_SEPARATOR)
 			send({type: 'album', id, title, detail, artist, artwork, songs})
 		} catch (error) {
 			send({type: 'error', message: String(error)})

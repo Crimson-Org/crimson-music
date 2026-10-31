@@ -411,7 +411,7 @@ static void bind_row(GtkSignalListItemFactory *factory, GtkListItem *item, gpoin
 	SongRow *row = g_object_get_data(G_OBJECT(item), "row");
 	CrimsonSong *song = gtk_list_item_get_item(item);
 	gtk_label_set_text(GTK_LABEL(row->title), song->title);
-	g_autofree char *details = *song->album ? g_strdup_printf("%s · %s", song->artist, song->album)
+	g_autofree char *details = *song->album ? g_strdup_printf("%s" TEXT_SEPARATOR "%s", song->artist, song->album)
 		: g_strdup(song->artist);
 	gtk_label_set_text(GTK_LABEL(row->details), details);
 	gtk_widget_set_visible(row->details, *details != '\0');
