@@ -21,6 +21,10 @@
   <a href="https://github.com/Crimson-Org/crimson-music/releases/latest"><b>Download Here!</b></a>
 </p>
 
+<p align="center">
+  <img src="./demo1.png" alt="Crimson Music playing a song from an artist page">
+</p>
+
 ## Why
 
 The YouTube Music website fills the screen with feeds, shelves and recommendations.\
@@ -64,8 +68,12 @@ The minimize button sends the window to the tray.
 
 ### Signing in
 
-On the first launch Crimson Music signs in with your [Pear Desktop](https://github.com/pear-devs/pear-desktop) account when it finds one.\
-Otherwise Google's own sign in page opens once.
+Search and play without an account, and signing in adds your playlists and liked songs.\
+The first launch uses your [Pear Desktop](https://github.com/pear-devs/pear-desktop) account if one is found.
+
+### Your own music
+
+The Local Media Library plays music from your Music folder, and Settings lets you choose other folders.
 
 ### Fewer ads and trackers
 
