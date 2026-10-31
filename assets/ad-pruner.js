@@ -1,4 +1,4 @@
-// Removes the ad entries from YouTube's player answers before the page reads them, as Pear Desktop does
+// Removes the ad entries from YouTube's player answers before the page reads them
 (() => {
 	const AD_KEYS = ['playerAds', 'adPlacements', 'adSlots']
 

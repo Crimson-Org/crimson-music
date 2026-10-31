@@ -51,8 +51,7 @@ Play playlists in order or shuffled, while the player bar takes on the colours o
 
 ### No account needed
 
-Search and play without signing in, and sign in to add your playlists and liked songs.\
-If you are signed in to YouTube Music in [Pear Desktop](https://github.com/pear-devs/pear-desktop), the first launch uses that sign-in.
+Search and play without signing in, and sign in to add your playlists and liked songs.
 
 ### Your own music
 

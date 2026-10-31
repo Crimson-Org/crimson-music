@@ -3,7 +3,6 @@
 #include "common/identity.h"
 #include "common/log.h"
 #include "engine.h"
-#include "pear-session.h"
 
 #define START_ADDRESS "https://music.youtube.com/library"
 #define ALLOWED_PAGES "https://music.youtube.com/*"
@@ -267,24 +266,15 @@ void reload_engine(Engine *engine) {
 }
 
 
-static void open_start_page(gpointer data) {
-	reload_engine(data);
-}
-
-
-/* A first launch borrows the Pear Desktop sign in when there is one, so most people never see a sign in page */
+/* The sign in lives in the app's own cookie store, kept between launches */
 static void open_session(Engine *engine) {
 	note_startup_moment("Blocklist loaded");
 	g_autofree char *cookie_path = get_engine_path(g_get_user_data_dir(), COOKIE_FILE);
-	gboolean is_first_launch = !g_file_test(cookie_path, G_FILE_TEST_EXISTS);
 	WebKitCookieManager *cookies = webkit_network_session_get_cookie_manager(engine->session);
 	g_autofree char *directory = g_path_get_dirname(cookie_path);
 	g_mkdir_with_parents(directory, 0700);
 	webkit_cookie_manager_set_persistent_storage(cookies, cookie_path, WEBKIT_COOKIE_PERSISTENT_STORAGE_SQLITE);
-	if (is_first_launch)
-		import_pear_session(cookies, open_start_page, engine);
-	else
-		reload_engine(engine);
+	reload_engine(engine);
 }
 
 
