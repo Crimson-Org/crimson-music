@@ -26,12 +26,12 @@
 The YouTube Music website fills the screen with feeds, shelves and recommendations.\
 Crimson Music shows your playlists in a sidebar and the songs of the one you pick, and nothing else.
 
-## Features
+## About
 
 ### Your library
 
 Liked Music and every playlist you made or saved in YouTube Music, with their covers.\
-The library from your last visit shows the instant the window opens and updates quietly behind it.\
+Your library from last time shows the moment the window opens, and updates in the background.\
 Window size, the open playlist, volume and shuffle are kept between launches.
 
 ### Search, artists and albums
@@ -51,7 +51,7 @@ Drag playlists in the sidebar to put them in your own order.
 
 ### Playing
 
-A click on a song plays it and carries on through the playlist, in order or shuffled.\
+Click a song to play it and the rest of the playlist, in order or shuffled.\
 Ctrl+P plays and pauses, Ctrl+Left and Ctrl+Right skip, and Ctrl+S turns shuffle on and off.\
 In the player bar the title leads back to where the song plays from, the artist opens the artist and a right click opens the song menu.\
 The player bar takes on the colours of the playing cover, which drift slowly behind the controls under a fine film grain.\
