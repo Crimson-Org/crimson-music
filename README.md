@@ -17,6 +17,10 @@
   </a>
 </p>
 
+<p align="center">
+  <a href="https://github.com/Crimson-Org/crimson-music/releases/latest"><b>Download Here!</b></a>
+</p>
+
 ## Why
 
 The YouTube Music website fills the screen with feeds, shelves and recommendations.\
@@ -73,7 +77,8 @@ Google's ad and analytics servers are blocked.
 You need a [C compiler](https://gcc.gnu.org/), [make](https://www.gnu.org/software/make/), [pkg-config](https://www.freedesktop.org/wiki/Software/pkg-config/) and the development files for [GTK4](https://gtk.org) 4.14, [libadwaita](https://gnome.pages.gitlab.gnome.org/libadwaita/) 1.8, [WebKitGTK](https://webkitgtk.org) 6.0, [libsoup](https://libsoup.gnome.org) 3 and [SQLite](https://sqlite.org).\
 On [openSUSE](https://www.opensuse.org/) these come from `sudo zypper install gcc make pkg-config gtk4-devel libadwaita-devel webkitgtk4-devel libsoup-devel sqlite3-devel`.
 
-Clone it with `git clone --recurse-submodules` so the shared Crimson Core code comes along.\
-`sh .crimson-build/install.sh` installs it and `sh .crimson-build/uninstall.sh` removes it.\
-`sh .crimson-build/run.sh` builds and starts it and `sh .crimson-build/archive.sh` writes a tar.gz to `dist/`.\
-`sh .crimson-build/appimage.sh` writes an [AppImage](https://appimage.org/) to `dist/` on [Arch Linux](https://archlinux.org/).
+Steps:
+ 1. Clone using `git clone --recurse-submodules https://github.com/Crimson-Org/crimson-music`
+ 2. Run `sh .crimson-build/install.sh`
+
+`sh .crimson-build/uninstall.sh` removes it again.
