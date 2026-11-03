@@ -10,12 +10,8 @@
 /* Where each artist's name keeps the artist's id and its click */
 #define ARTIST_ID "artist-id"
 #define ARTIST_CLICK "artist-click"
-/* Reports arrive four times a second, so the slider glides across each gap instead of jumping */
-#define GLIDE_MILLISECONDS 250
 /* Buttons that come and go with the song take this long to slide in or out */
 #define BUTTON_SLIDE_MILLISECONDS 250
-/* Larger moves are seeks or new songs, which jump straight there */
-#define GLIDE_LIMIT_SECONDS 2
 /* One wheel step changes the volume by this much, out of 100 */
 /* Room for times up to 999:59, so the slider never shifts as the numbers grow */
 #define TIME_CHARACTERS 6
@@ -49,14 +45,17 @@ struct PlayerBar {
 	const PlayerBarEvents *events;
 	gpointer data;
 	GtkWidget *root, *ambience, *details, *artwork, *title, *artist, *play_stack, *position, *elapsed, *length;
-	AdwAnimation *glide;
 	/* The songs the fan showed last, to tell how it changed */
 	GPtrArray *fan_ids;
 	GtkWidget *upcoming, *upcoming_covers, *upcoming_queued, *upcoming_queued_heading, *upcoming_list;
 	GtkWidget *sound, *like, *dislike, *love, *lyrics, *video, *comments, *chapters, *chapter_list, *chapter_heading;
 	int current_chapter;
 	GPtrArray *chapter_starts;
+	/* The time the player last reported and when, which the slider counts on from each frame while the song plays */
 	double time;
+	gint64 time_reported_at;
+	gboolean is_advancing;
+	guint follow_tick;
 	gint64 last_seek_time;
 	double duration;
 	/* The position is held down, so the slider follows the pointer and the song only moves on release */
@@ -95,9 +94,8 @@ static void show_time_labels(PlayerBar *bar, double time) {
 }
 
 
-/* A click or drag moves the slider at once and stops any glide, which would otherwise pull it back */
+/* A click or drag moves the slider at once */
 static gboolean move_position(GtkRange *range, GtkScrollType scroll, double value, PlayerBar *bar) {
-	adw_animation_reset(bar->glide);
 	bar->last_seek_time = g_get_monotonic_time();
 	show_time_labels(bar, CLAMP(value, 0, bar->duration));
 	if (!bar->is_holding_position)
@@ -898,10 +896,6 @@ static GtkWidget *create_position(PlayerBar *bar) {
 	gtk_event_controller_set_propagation_phase(buttons, GTK_PHASE_CAPTURE);
 	g_signal_connect(buttons, "event", G_CALLBACK(notice_position_button), bar);
 	gtk_widget_add_controller(bar->position, buttons);
-	GtkAdjustment *adjustment = gtk_range_get_adjustment(GTK_RANGE(bar->position));
-	AdwAnimationTarget *target = adw_property_animation_target_new(G_OBJECT(adjustment), "value");
-	bar->glide = adw_timed_animation_new(bar->position, 0, 0, GLIDE_MILLISECONDS, target);
-	adw_timed_animation_set_easing(ADW_TIMED_ANIMATION(bar->glide), ADW_LINEAR);
 	for (GtkWidget *label = bar->elapsed; label; label = label == bar->elapsed ? bar->length : NULL) {
 		gtk_widget_add_css_class(label, "numeric");
 		gtk_widget_add_css_class(label, "dimmed");
@@ -981,16 +975,43 @@ static void show_artist_names(PlayerBar *bar, CrimsonSong *song) {
 }
 
 
-void show_player_song(PlayerBar *bar, CrimsonSong *song) {
-	g_set_object(&bar->song, song);
-	gtk_label_set_text(GTK_LABEL(bar->title), song->title);
-	show_artist_names(bar, song);
-	gtk_widget_set_tooltip_text(bar->title, song->title);
-	gtk_widget_set_tooltip_text(bar->artist, song->artist);
-	show_artwork(bar->artwork, song->artwork);
-	replay_entrance(bar->details);
-	bar->duration = 0;
-	show_player_time(bar, 0, read_song_length(song));
+/* How much of the song has played by now, counted on from the player's last report while it plays */
+static double read_heard_time(PlayerBar *bar, gint64 now) {
+	double since = bar->is_advancing ? (double)(now - bar->time_reported_at) / G_USEC_PER_SEC : 0;
+	return CLAMP(bar->time + since, 0, bar->duration);
+}
+
+
+/* The slider shows the heard part of the song's length, left alone while the listener drags it or just after a seek,
+ * when the player's reports still lag behind */
+static void show_position(PlayerBar *bar, gint64 now) {
+	if (bar->is_holding_position || now - bar->last_seek_time < SEEK_SETTLE_MICROSECONDS)
+		return;
+	double heard = read_heard_time(bar, now);
+	gtk_range_set_range(GTK_RANGE(bar->position), 0, MAX(bar->duration, 1));
+	gtk_range_set_value(GTK_RANGE(bar->position), heard);
+	show_time_labels(bar, heard);
+}
+
+
+static gboolean follow_playing(GtkWidget *widget, GdkFrameClock *clock, gpointer data) {
+	show_position(data, gdk_frame_clock_get_frame_time(clock));
+	return G_SOURCE_CONTINUE;
+}
+
+
+/* The time heard so far is kept before the counting starts or stops, so the slider never skips */
+static void set_advancing(PlayerBar *bar, gboolean is_advancing) {
+	gint64 now = g_get_monotonic_time();
+	bar->time = read_heard_time(bar, now);
+	bar->time_reported_at = now;
+	bar->is_advancing = is_advancing;
+	if (is_advancing && !bar->follow_tick)
+		bar->follow_tick = gtk_widget_add_tick_callback(bar->position, follow_playing, bar, NULL);
+	if (!is_advancing && bar->follow_tick) {
+		gtk_widget_remove_tick_callback(bar->position, bar->follow_tick);
+		bar->follow_tick = 0;
+	}
 }
 
 
@@ -999,23 +1020,26 @@ void show_player_time(PlayerBar *bar, double time, double duration) {
 	 * listed, since the player's length wavers while the song streams in */
 	if (bar->duration <= 0 && duration > 0)
 		bar->duration = duration;
-	duration = bar->duration;
 	bar->time = time;
+	bar->time_reported_at = g_get_monotonic_time();
 	if (gtk_menu_button_get_active(GTK_MENU_BUTTON(bar->chapters)))
 		mark_current_chapter(bar);
-	if (bar->is_holding_position || g_get_monotonic_time() - bar->last_seek_time < SEEK_SETTLE_MICROSECONDS)
-		return;
-	gtk_range_set_range(GTK_RANGE(bar->position), 0, MAX(duration, 1));
-	double shown = gtk_range_get_value(GTK_RANGE(bar->position));
-	adw_animation_reset(bar->glide);
-	if (time > shown && time - shown < GLIDE_LIMIT_SECONDS) {
-		adw_timed_animation_set_value_from(ADW_TIMED_ANIMATION(bar->glide), shown);
-		adw_timed_animation_set_value_to(ADW_TIMED_ANIMATION(bar->glide), time);
-		adw_animation_play(bar->glide);
-	} else {
-		gtk_range_set_value(GTK_RANGE(bar->position), time);
-	}
-	show_time_labels(bar, time);
+	show_position(bar, bar->time_reported_at);
+}
+
+
+void show_player_song(PlayerBar *bar, CrimsonSong *song) {
+	g_set_object(&bar->song, song);
+	gtk_label_set_text(GTK_LABEL(bar->title), song->title);
+	show_artist_names(bar, song);
+	gtk_widget_set_tooltip_text(bar->title, song->title);
+	gtk_widget_set_tooltip_text(bar->artist, song->artist);
+	show_artwork(bar->artwork, song->artwork);
+	replay_entrance(bar->details);
+	/* A new song counts from the start only once the player says it plays */
+	set_advancing(bar, FALSE);
+	bar->duration = 0;
+	show_player_time(bar, 0, read_song_length(song));
 }
 
 
@@ -1062,6 +1086,7 @@ void show_player_disliked(PlayerBar *bar, gboolean is_disliked) {
 
 
 void show_player_playing(PlayerBar *bar, gboolean is_playing, gboolean is_waiting) {
+	set_advancing(bar, is_playing && !is_waiting);
 	const char *shown = is_waiting ? "spinner" : is_playing ? "pause" : "play";
 	gtk_stack_set_visible_child_name(GTK_STACK(bar->play_stack), shown);
 	set_ambience_moving(bar->ambience, is_playing);
