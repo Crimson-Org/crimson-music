@@ -274,16 +274,20 @@ row-action:focus-visible {
 	outline-offset: -2px;
 }
 
-/* A heart shows on the row under the pointer, counting the row's padding around the song, and stays on songs
- * already liked */
+/* Hearts and Play show on the row under the pointer, counting the row's padding around the song, Play stays on the
+ * selected row and hearts stay on songs already liked */
 .song .like-button,
-.song .love-button {
+.song .love-button,
+.song .row-play-button {
 	opacity: 0;
 	transition: opacity 150ms ease-out;
 }
 
 row:hover > revealer > .song .like-button,
+row:hover > revealer > .song .row-play-button,
+row:selected > revealer > .song .row-play-button,
 .song:hover .like-button,
+.song .row-play-button:focus-visible,
 .song .like-button:focus-visible,
 row:hover > revealer > .song .love-button,
 .song:hover .love-button,
@@ -748,7 +752,8 @@ button.control:not(.suggested-action):not(:checked):hover > *,
 	margin: 8px 12px;
 }
 
-.chapter-list row:selected {
+.chapter-list row:selected,
+.song-list > row:selected {
 	background-color: alpha(var(--accent-bg-color), 0.25);
 	color: inherit;
 }

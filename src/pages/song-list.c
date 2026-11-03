@@ -22,7 +22,7 @@
 
 /* Widgets of one row, looked up again when the row shows another song */
 typedef struct {
-	GtkWidget *revealer, *box, *artwork, *title, *details, *length, *like, *dislike, *love, *add;
+	GtkWidget *revealer, *box, *artwork, *title, *details, *length, *like, *dislike, *love, *add, *play;
 	GtkListItem *item;
 	GtkWidget *list;
 } SongRow;
@@ -342,6 +342,12 @@ static void add_suggestion(GtkButton *button, SongRow *row) {
 }
 
 
+/* The Play button plays the song as a double click or Enter on the row does, through the list's own action */
+static void play_row(GtkButton *button, SongRow *row) {
+	gtk_widget_activate_action(row->list, "list.activate-item", "u", gtk_list_item_get_position(row->item));
+}
+
+
 static void add_row_controllers(SongRow *row) {
 	GtkGesture *click = gtk_gesture_click_new();
 	gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(click), SECONDARY_BUTTON);
@@ -390,6 +396,10 @@ static void set_up_row(GtkSignalListItemFactory *factory, GtkListItem *item, Gtk
 	row->dislike = create_row_action("crimson-dislike-symbolic", "like-button");
 	g_signal_connect(row->dislike, "clicked", G_CALLBACK(toggle_dislike), row);
 	gtk_box_append(GTK_BOX(row->box), row->dislike);
+	row->play = create_row_action("media-playback-start-symbolic", "row-play-button");
+	gtk_widget_set_tooltip_text(row->play, TEXT_PLAY);
+	g_signal_connect(row->play, "clicked", G_CALLBACK(play_row), row);
+	gtk_box_append(GTK_BOX(row->box), row->play);
 	row->add = create_row_action("list-add-symbolic", NULL);
 	gtk_widget_set_tooltip_text(row->add, TEXT_ADD_SUGGESTION);
 	g_signal_connect(row->add, "clicked", G_CALLBACK(add_suggestion), row);
@@ -537,7 +547,6 @@ GtkWidget *create_song_list(const SongListEvents *events, gpointer data) {
 	g_signal_connect(factory, "bind", G_CALLBACK(bind_row), NULL);
 	g_signal_connect(factory, "unbind", G_CALLBACK(unbind_row), NULL);
 	g_signal_connect(factory, "teardown", G_CALLBACK(tear_down_row), NULL);
-	gtk_list_view_set_single_click_activate(GTK_LIST_VIEW(list), TRUE);
 	gtk_widget_add_css_class(list, "song-list");
 	return list;
 }
@@ -578,15 +587,19 @@ static void hold_scroll_position(GtkWidget *list) {
 }
 
 
-/* The list's own songs and the suggestions after them are the two sections of one model */
+/* The list's own songs and the suggestions after them are the two sections of one model, where a click selects a
+ * song and a double click or Enter plays it */
 static void show_list_model(GtkWidget *list, SongListSetup *setup) {
 	g_clear_object(&setup->parts);
 	setup->parts = g_list_store_new(G_TYPE_LIST_MODEL);
 	g_list_store_append(setup->parts, setup->songs);
 	if (setup->suggestions)
 		g_list_store_append(setup->parts, setup->suggestions);
-	g_autoptr(GtkNoSelection) selection = gtk_no_selection_new(G_LIST_MODEL(gtk_flatten_list_model_new(
+	g_autoptr(GtkSingleSelection) selection = gtk_single_selection_new(G_LIST_MODEL(gtk_flatten_list_model_new(
 		G_LIST_MODEL(g_object_ref(setup->parts)))));
+	gtk_single_selection_set_autoselect(selection, FALSE);
+	gtk_single_selection_set_can_unselect(selection, TRUE);
+	gtk_single_selection_set_selected(selection, GTK_INVALID_LIST_POSITION);
 	gtk_list_view_set_model(GTK_LIST_VIEW(list), GTK_SELECTION_MODEL(selection));
 }
 
