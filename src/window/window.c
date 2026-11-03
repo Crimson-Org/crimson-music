@@ -418,6 +418,7 @@ static void notice_failure(const char *message, const char *playlist_id, gpointe
 
 static void press_media_key(const char *action, gpointer data) {
 	Window *window = data;
+	g_message("Media key %s", action);
 	if (g_strcmp0(action, "next") == 0 || g_strcmp0(action, "previous") == 0)
 		g_action_group_activate_action(G_ACTION_GROUP(window->window), action, NULL);
 	else if ((g_strcmp0(action, "play") == 0 && !window->is_playing)

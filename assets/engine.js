@@ -6,6 +6,7 @@
 	const WATCH_MILLISECONDS = 250
 	const GREYED_OUT = 'MUSIC_ITEM_RENDERER_DISPLAY_POLICY_GREY_OUT'
 	const PLAYING = 1
+	const PAUSED = 2
 	const BUFFERING = 3
 	// A song this close to the start counts as starting over
 	const START_SECONDS = 1
@@ -892,6 +893,9 @@
 	let hasSoughtStart = false
 	// The volume Crimson Music asked for, which the page puts back whenever YouTube applies its own remembered one
 	let wantedVolume = -1
+	// Whether the last pause came from Crimson Music, so a pause YouTube or WebKit makes alone is logged
+	let isPausing = false
+	let lastState = -1
 
 
 	// Loading alone leaves the song unstarted when the page was paused, so it is told to play as well
@@ -899,6 +903,7 @@
 		const player = await waitForPlayer()
 		startingOver = resume ? '' : id
 		hasSoughtStart = false
+		isPausing = false
 		wantedVolume = volume
 		player.unMute()
 		player.loadVideoById(id)
@@ -1004,11 +1009,26 @@
 		}
 		startOver(player, report.video, state, player.getCurrentTime?.() ?? 0)
 		keepVolume(player)
+		noticeLonePause(player, report.video, state)
 		const key = JSON.stringify(report)
 		if (key === lastReport)
 			return
 		lastReport = key
 		send(report)
+	}
+
+
+	// Songs sometimes stop at the start after a long day of playing, and this tells which part paused them
+	function noticeLonePause(player, video, state) {
+		const previous = lastState
+		lastState = state
+		if (state !== PAUSED || previous === PAUSED || isPausing)
+			return
+		const media = player.querySelector('video')
+		send({type: 'warning', message: `Song ${video} paused without being asked, at ${player.getCurrentTime?.()} s, `
+			+ `after state ${previous}, starting over ${video === startingOver}, media paused ${media?.paused}, `
+			+ `ready ${media?.readyState}, network ${media?.networkState}, error ${media?.error?.code}, `
+			+ `idle ${Math.round((Date.now() - window._lact) / 1000)} s`})
 	}
 
 
@@ -1046,8 +1066,14 @@
 		moveInPlaylist: (id, set, successor) => editPlaylist(id, [{action: 'ACTION_MOVE_VIDEO_BEFORE', setVideoId: set,
 			...(successor ? {movedSetVideoIdSuccessor: successor} : {})}]),
 		play,
-		pause: () => getPlayer()?.pauseVideo(),
-		resume: () => getPlayer()?.playVideo(),
+		pause: () => {
+			isPausing = true
+			getPlayer()?.pauseVideo()
+		},
+		resume: () => {
+			isPausing = false
+			getPlayer()?.playVideo()
+		},
 		seek: seconds => getPlayer()?.seekTo(seconds, true),
 		setVolume: volume => {
 			wantedVolume = volume

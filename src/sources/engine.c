@@ -151,6 +151,9 @@ static void receive_message(WebKitUserContentManager *manager, JSCValue *message
 	} else if (strcmp(type, "media-key") == 0) {
 		g_autofree char *action = read_text(message, "action");
 		engine->events->media_key(action, engine->data);
+	} else if (strcmp(type, "warning") == 0) {
+		g_autofree char *text = read_text(message, "message");
+		g_warning("%s", text);
 	} else if (strcmp(type, "error") == 0 && !engine->is_signing_out) {
 		g_autofree char *text = read_text(message, "message");
 		g_autofree char *playlist_id = read_text(message, "playlist");
