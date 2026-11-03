@@ -995,10 +995,11 @@ void show_player_song(PlayerBar *bar, CrimsonSong *song) {
 
 
 void show_player_time(PlayerBar *bar, double time, double duration) {
-	/* The player knows no length until the video loads, so the listed one stays until then */
-	if (duration <= 0)
-		duration = bar->duration;
-	bar->duration = duration;
+	/* The bar measures the song by its listed length, which the player's own length only replaces for a song with none
+	 * listed, since the player's length wavers while the song streams in */
+	if (bar->duration <= 0 && duration > 0)
+		bar->duration = duration;
+	duration = bar->duration;
 	bar->time = time;
 	if (gtk_menu_button_get_active(GTK_MENU_BUTTON(bar->chapters)))
 		mark_current_chapter(bar);
@@ -1006,13 +1007,8 @@ void show_player_time(PlayerBar *bar, double time, double duration) {
 		return;
 	gtk_range_set_range(GTK_RANGE(bar->position), 0, MAX(duration, 1));
 	double shown = gtk_range_get_value(GTK_RANGE(bar->position));
-	double step = time - shown;
-	/* While a song streams in, the player's time wavers back by a little, so the slider holds still rather than
-	 * jumping back, and only seeks and new songs move it back */
-	if (step < 0 && -step < GLIDE_LIMIT_SECONDS)
-		return;
 	adw_animation_reset(bar->glide);
-	if (step < GLIDE_LIMIT_SECONDS) {
+	if (time > shown && time - shown < GLIDE_LIMIT_SECONDS) {
 		adw_timed_animation_set_value_from(ADW_TIMED_ANIMATION(bar->glide), shown);
 		adw_timed_animation_set_value_to(ADW_TIMED_ANIMATION(bar->glide), time);
 		adw_animation_play(bar->glide);
