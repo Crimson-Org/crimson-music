@@ -676,7 +676,9 @@ static void open_chapters(GtkPopover *popover, PlayerBar *bar) {
 
 static GtkWidget *create_chapters(PlayerBar *bar) {
 	bar->chapters = gtk_menu_button_new();
-	gtk_menu_button_set_icon_name(GTK_MENU_BUTTON(bar->chapters), "view-list-bullet-symbolic");
+	/* A plain icon, since an icon name puts the icon in a box beside a hidden arrow, where the circle drawn on the
+	 * box leaves the icon off centre */
+	gtk_menu_button_set_child(GTK_MENU_BUTTON(bar->chapters), gtk_image_new_from_icon_name("view-list-bullet-symbolic"));
 	gtk_widget_set_tooltip_text(bar->chapters, TEXT_CHAPTERS);
 	gtk_widget_add_css_class(bar->chapters, "flat");
 	gtk_widget_add_css_class(bar->chapters, "control");
