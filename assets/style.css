@@ -617,11 +617,6 @@ button.control:not(.suggested-action):not(:checked):hover > *,
 	background-color: alpha(black, 0.4);
 }
 
-/* The moving colours redraw the labels with every frame, and a blurred shadow would be blurred again each time */
-.player-bar label {
-	text-shadow: 0 1px alpha(black, 0.9);
-}
-
 .player-bar scale trough {
 	background-color: alpha(black, 0.35);
 }
