@@ -1,3 +1,10 @@
+/* Every page's content starts this far in, so a list, a loading page and a page of albums all put the first row in
+ * the same place */
+:root {
+	--page-inset: 24px;
+	--row-side: 12px;
+}
+
 @keyframes slide-in {
 	from {
 		opacity: 0;
@@ -28,8 +35,9 @@
 	animation: slide-up 400ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+/* The rows carry their own sides, so the list leaves only the rest of the page's inset there */
 .song-list {
-	padding: 12px;
+	padding: var(--page-inset) calc(var(--page-inset) - var(--row-side));
 }
 
 /* The row's padding sits inside the song, so right clicks, drags and drops land anywhere on the row */
@@ -40,7 +48,7 @@
 }
 
 .song-list > row > revealer > .song {
-	padding: 6px 12px;
+	padding: 6px var(--row-side);
 }
 
 .playing-icon {
@@ -172,7 +180,7 @@ headerbar.title-bar {
 }
 
 .page-body {
-	padding: 24px;
+	padding: var(--page-inset);
 }
 
 .page-search {
@@ -228,7 +236,7 @@ headerbar.title-bar {
 /* Song rows line up with the section headings above them */
 .page-body .song-list {
 	padding: 0;
-	margin: 0 -12px;
+	margin: 0 calc(var(--row-side) - var(--page-inset));
 }
 
 /* The invisible button right click menus open from takes no room */
@@ -531,7 +539,7 @@ ambience.plain {
 
 /* Waiting pages show soft shapes in their own layout, breathing one after another like a wave */
 .skeleton {
-	padding: 24px;
+	padding: var(--page-inset);
 }
 
 .bone {
@@ -550,7 +558,7 @@ cover.bone.round {
 }
 
 .bone-row {
-	padding: 6px 12px;
+	padding: 6px var(--row-side);
 }
 
 @keyframes breathe {

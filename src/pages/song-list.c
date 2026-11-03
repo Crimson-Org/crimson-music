@@ -14,8 +14,6 @@
 #define DROP_CLASS "drop-target"
 #define SECONDARY_BUTTON 3
 #define FOLD_MILLISECONDS 220
-/* The scroll stays held a little past the fold, so the last frame of the fold cannot move it */
-#define FOLD_HOLD_EXTRA_MILLISECONDS 100
 /* A song added longer ago than this shows plainly once scrolled to, instead of sliding open then */
 #define ARRIVAL_MICROSECONDS (2 * G_USEC_PER_SEC)
 #define ARRIVING_KEY "arriving"
@@ -554,41 +552,6 @@ GtkWidget *create_song_list(const SongListEvents *events, gpointer data) {
 }
 
 
-typedef struct {
-	GtkAdjustment *adjustment;
-	double value;
-	gint64 end;
-} ScrollHold;
-
-
-static gboolean keep_scroll_position(GtkWidget *list, GdkFrameClock *clock, gpointer data) {
-	ScrollHold *hold = data;
-	gtk_adjustment_set_value(hold->adjustment, hold->value);
-	return gdk_frame_clock_get_frame_time(clock) < hold->end ? G_SOURCE_CONTINUE : G_SOURCE_REMOVE;
-}
-
-
-static void free_scroll_hold(gpointer data) {
-	ScrollHold *hold = data;
-	g_object_unref(hold->adjustment);
-	g_free(hold);
-}
-
-
-/* The list view moves its view when a section is added after the songs, so the view is held where it was while the
- * new rows open */
-static void hold_scroll_position(GtkWidget *list) {
-	GtkAdjustment *adjustment = gtk_scrollable_get_vadjustment(GTK_SCROLLABLE(list));
-	if (!adjustment)
-		return;
-	ScrollHold *hold = g_new(ScrollHold, 1);
-	hold->adjustment = g_object_ref(adjustment);
-	hold->value = gtk_adjustment_get_value(adjustment);
-	hold->end = g_get_monotonic_time() + (FOLD_MILLISECONDS + FOLD_HOLD_EXTRA_MILLISECONDS) * G_TIME_SPAN_MILLISECOND;
-	gtk_widget_add_tick_callback(list, keep_scroll_position, hold, free_scroll_hold);
-}
-
-
 /* The list's own songs and the suggestions after them are the two sections of one model, where a click selects a
  * song and a double click or Enter plays it */
 static void show_list_model(GtkWidget *list, SongListSetup *setup) {
@@ -606,21 +569,10 @@ static void show_list_model(GtkWidget *list, SongListSetup *setup) {
 }
 
 
-/* Songs added to a list hold the view too, so an added song opens without moving the rows on screen */
-static void hold_for_added(GListModel *songs, guint position, guint removed, guint added, GtkWidget *list) {
-	gboolean was_empty = g_list_model_get_n_items(songs) + removed == added;
-	if (added > removed && !was_empty)
-		hold_scroll_position(list);
-}
-
-
 void set_song_list_songs(GtkWidget *list, GListModel *songs, gboolean is_reorderable) {
 	SongListSetup *setup = g_object_get_data(G_OBJECT(list), "setup");
 	setup->is_reorderable = is_reorderable;
-	if (setup->songs)
-		g_signal_handlers_disconnect_by_data(setup->songs, list);
 	g_set_object(&setup->songs, songs);
-	g_signal_connect_object(songs, "items-changed", G_CALLBACK(hold_for_added), list, 0);
 	show_list_model(list, setup);
 }
 
@@ -641,7 +593,6 @@ void set_song_list_suggestions(GtkWidget *list, GListModel *suggestions) {
 	guint count = g_list_model_get_n_items(G_LIST_MODEL(setup->parts));
 	gpointer added[] = {suggestions};
 	g_list_store_splice(setup->parts, 1, count - 1, added, suggestions ? 1 : 0);
-	hold_scroll_position(list);
 }
 
 

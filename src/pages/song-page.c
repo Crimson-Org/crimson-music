@@ -1,4 +1,3 @@
-#include <math.h>
 #include <string.h>
 #include <adwaita.h>
 
@@ -32,7 +31,6 @@ static const int SKELETON_TITLE_WIDTHS[] = {260, 180, 320, 220, 280};
 #define HEADING_ARTWORK_SIZE 120
 #define CARD_ARTWORK_SIZE 120
 
-#define SCROLL_HOLD_MICROSECONDS (G_USEC_PER_SEC / 2)
 
 /* The Last.fm text beside the heading stays a short paragraph, with the whole of it in its tooltip */
 #define ABOUT_LINES 4
@@ -55,13 +53,10 @@ struct SongPage {
 	/* What Last.fm tells of an artist or album, beside the heading's title */
 	GtkWidget *about, *about_text, *about_facts;
 	GtkWidget *cards, *songs_heading, *stack, *list, *empty, *skeleton_cards, *scrolled;
-	/* A place to scroll back to once the songs are long enough to reach it, and when to stop waiting for that */
+	/* A place to scroll back to once the list has grown long enough to reach it */
 	double wanted_scroll;
-	gint64 scroll_settled;
-	/* Where the page last put the scroll, so a different place means the listener moved it */
-	double set_scroll;
-	gboolean has_set_scroll;
-	guint scroll_tick;
+	gboolean is_restoring_scroll;
+	gulong restore_handler;
 	GListModel *songs, *suggestions;
 	/* The search in the heading narrows the page to the songs and cards whose words hold what is typed */
 	GtkWidget *search_button, *search_revealer, *search_entry;
@@ -407,12 +402,55 @@ static GtkWidget *create_section_heading(const char *title) {
 	return heading;
 }
 
+/* A place still being scrolled back to counts as where the page is, so leaving at once never loses it */
+double get_song_page_scroll(SongPage *page) {
+	if (page->is_restoring_scroll)
+		return page->wanted_scroll;
+	return gtk_adjustment_get_value(gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(page->scrolled)));
+}
+
+
+/* The list only knows its new length once it has laid out its new songs, and while it lays out it ignores scrolling,
+ * so the place is set just after each layout, which the list takes up before the frame is drawn. The place is kept
+ * until it is reached or every song is in */
+static void restore_scroll(GdkFrameClock *clock, GtkWidget *scrolled) {
+	SongPage *page = g_object_get_data(G_OBJECT(scrolled), "song-page");
+	GtkAdjustment *adjustment = gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(scrolled));
+	gtk_adjustment_set_value(adjustment, page->wanted_scroll);
+	gboolean is_reached = gtk_adjustment_get_value(adjustment) >= page->wanted_scroll - 1;
+	if (!is_reached && !page->is_loaded)
+		return;
+	page->is_restoring_scroll = FALSE;
+	g_clear_signal_handler(&page->restore_handler, (void *)clock);
+}
+
+
+/* The layouts are watched from before the next one starts, since a watch added during a layout only sees the one
+ * after it, a frame too late */
+static void watch_layouts(SongPage *page) {
+	GdkFrameClock *clock = gtk_widget_get_frame_clock(page->scrolled);
+	if (!page->is_restoring_scroll || page->restore_handler || !clock)
+		return;
+	page->restore_handler = g_signal_connect_object(clock, "layout", G_CALLBACK(restore_scroll), page->scrolled,
+		G_CONNECT_AFTER);
+}
+
+
+void set_song_page_scroll(SongPage *page, double value) {
+	page->wanted_scroll = value;
+	page->is_restoring_scroll = TRUE;
+	watch_layouts(page);
+}
+
 
 /* A long playlist scrolls only its songs under a fixed heading, so thousands of rows stay quick, while
  * artists, albums and search results scroll as one page */
 static GtkWidget *create_body(SongPage *page) {
 	GtkWidget *scrolled = gtk_scrolled_window_new();
 	page->scrolled = scrolled;
+	g_object_set_data(G_OBJECT(scrolled), "song-page", page);
+	/* A place asked for before the window is on screen is watched for once the page shows */
+	g_signal_connect_swapped(scrolled, "map", G_CALLBACK(watch_layouts), page);
 	gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
 	add_smooth_scrolling(GTK_SCROLLED_WINDOW(scrolled));
 	if (page->is_long) {
@@ -851,48 +889,6 @@ void set_song_page_quiet_likes(SongPage *page, gboolean is_quiet) {
 		gtk_widget_add_css_class(page->list, "quiet-likes");
 	else
 		gtk_widget_remove_css_class(page->list, "quiet-likes");
-}
-
-
-/* A place still being scrolled back to counts as where the page is, so leaving at once never loses it */
-double get_song_page_scroll(SongPage *page) {
-	if (page->scroll_tick)
-		return page->wanted_scroll;
-	return gtk_adjustment_get_value(gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(page->scrolled)));
-}
-
-
-/* The songs may still be loading, so the place is set again each frame until the list is long enough for it, and
- * given up only when the listener scrolls somewhere else themselves */
-static gboolean keep_scroll(GtkWidget *widget, GdkFrameClock *clock, gpointer data) {
-	SongPage *page = data;
-	GtkAdjustment *adjustment = gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(page->scrolled));
-	gint64 now = gdk_frame_clock_get_frame_time(clock);
-	gboolean is_settled = now >= page->scroll_settled;
-	double value = gtk_adjustment_get_value(adjustment);
-	gboolean is_moved = is_settled && page->has_set_scroll && fabs(value - page->set_scroll) > 1;
-	if (!is_moved) {
-		gtk_adjustment_set_value(adjustment, page->wanted_scroll);
-		page->set_scroll = gtk_adjustment_get_value(adjustment);
-		page->has_set_scroll = TRUE;
-	}
-	gboolean is_reached = page->set_scroll >= page->wanted_scroll - 1;
-	if (!is_moved && (!is_reached || !is_settled))
-		return G_SOURCE_CONTINUE;
-	page->scroll_tick = 0;
-	return G_SOURCE_REMOVE;
-}
-
-
-void set_song_page_scroll(SongPage *page, double value) {
-	if (page->scroll_tick)
-		gtk_widget_remove_tick_callback(page->scrolled, page->scroll_tick);
-	page->wanted_scroll = value;
-	page->has_set_scroll = FALSE;
-	/* The list puts itself back at the top a frame or two after it changes songs, so the place is held a moment */
-	page->scroll_settled = g_get_monotonic_time() + SCROLL_HOLD_MICROSECONDS;
-	gtk_adjustment_set_value(gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(page->scrolled)), value);
-	page->scroll_tick = gtk_widget_add_tick_callback(page->scrolled, keep_scroll, page, NULL);
 }
 
 
