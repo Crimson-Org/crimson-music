@@ -51,11 +51,16 @@
 	padding: 6px var(--row-side);
 }
 
-.playing-icon {
-	opacity: 0;
+/* The playing mark and Play both sit on a song's cover, as a white sign on a dimmed cover */
+.playing-icon,
+.song row-action.row-play-button {
 	color: white;
 	background-color: alpha(black, 0.45);
 	border-radius: 6px;
+}
+
+.playing-icon {
+	opacity: 0;
 	transition: opacity 250ms ease-out;
 }
 
@@ -64,21 +69,23 @@
 	opacity: 1;
 }
 
-/* Play takes the cover's place under the pointer, so the playing mark steps aside for it */
-row:hover > revealer > .song.playing .playing-icon {
+/* Play takes the cover's place under the pointer or keyboard focus, so the playing mark steps aside for it */
+row:hover > revealer > .song.playing .playing-icon,
+.song.playing:focus-within .playing-icon {
 	opacity: 0;
 }
 
 .song row-action.row-play-button {
 	min-width: 0;
 	min-height: 0;
-	color: white;
-	background-color: alpha(black, 0.45);
-	border-radius: 6px;
 }
 
 .song row-action.row-play-button:hover {
 	background-color: alpha(black, 0.6);
+}
+
+.song row-action.row-play-button:active {
+	background-color: alpha(black, 0.75);
 }
 
 .song .song-title {
@@ -539,7 +546,7 @@ ambience.plain {
 
 /* Waiting pages show soft shapes in their own layout, breathing one after another like a wave */
 .skeleton {
-	padding: var(--page-inset);
+	padding: var(--page-inset) calc(var(--page-inset) - var(--row-side));
 }
 
 .bone {
@@ -867,6 +874,12 @@ button.control:not(.suggested-action):not(:checked):hover > *,
 }
 
 /* The suggestions after a playlist's songs start under a heading of their own */
+/* Only the suggestions show their section's heading, which brings its own room, so the empty heading above the songs
+ * takes none */
+listview.song-list > header {
+	padding: 0;
+}
+
 .suggestions-heading {
 	margin: 18px 12px 6px;
 }

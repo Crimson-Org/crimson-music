@@ -31,7 +31,6 @@ static const int SKELETON_TITLE_WIDTHS[] = {260, 180, 320, 220, 280};
 #define HEADING_ARTWORK_SIZE 120
 #define CARD_ARTWORK_SIZE 120
 
-
 /* The Last.fm text beside the heading stays a short paragraph, with the whole of it in its tooltip */
 #define ABOUT_LINES 4
 #define ABOUT_WIDTH 420
@@ -410,18 +409,42 @@ double get_song_page_scroll(SongPage *page) {
 }
 
 
+static void stop_restoring_scroll(SongPage *page) {
+	page->is_restoring_scroll = FALSE;
+	GdkFrameClock *clock = gtk_widget_get_frame_clock(page->scrolled);
+	if (clock)
+		g_clear_signal_handler(&page->restore_handler, clock);
+}
+
+
 /* The list only knows its new length once it has laid out its new songs, and while it lays out it ignores scrolling,
- * so the place is set just after each layout, which the list takes up before the frame is drawn. The place is kept
- * until it is reached or every song is in */
+ * so the place is set just after each layout, which the list takes up before the frame is drawn. A list off screen
+ * or still without songs has no length yet, so the place waits for it, and is kept until it is reached or every
+ * song is in */
 static void restore_scroll(GdkFrameClock *clock, GtkWidget *scrolled) {
 	SongPage *page = g_object_get_data(G_OBJECT(scrolled), "song-page");
+	guint count = g_list_model_get_n_items(G_LIST_MODEL(page->shown_songs));
+	if (!count || !gtk_widget_get_mapped(page->list)) {
+		if (!count && page->is_loaded)
+			stop_restoring_scroll(page);
+		return;
+	}
 	GtkAdjustment *adjustment = gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(scrolled));
 	gtk_adjustment_set_value(adjustment, page->wanted_scroll);
 	gboolean is_reached = gtk_adjustment_get_value(adjustment) >= page->wanted_scroll - 1;
-	if (!is_reached && !page->is_loaded)
-		return;
-	page->is_restoring_scroll = FALSE;
-	g_clear_signal_handler(&page->restore_handler, (void *)clock);
+	if (is_reached || page->is_loaded)
+		stop_restoring_scroll(page);
+}
+
+
+/* The listener scrolling or clicking in the list takes over from a place still being waited for */
+static gboolean notice_listener(GtkEventControllerLegacy *controller, GdkEvent *event, SongPage *page) {
+	GdkEventType type = gdk_event_get_event_type(event);
+	gboolean is_input = type == GDK_SCROLL || type == GDK_BUTTON_PRESS || type == GDK_KEY_PRESS
+		|| type == GDK_TOUCH_BEGIN;
+	if (is_input && page->is_restoring_scroll)
+		stop_restoring_scroll(page);
+	return FALSE;
 }
 
 
@@ -451,6 +474,10 @@ static GtkWidget *create_body(SongPage *page) {
 	g_object_set_data(G_OBJECT(scrolled), "song-page", page);
 	/* A place asked for before the window is on screen is watched for once the page shows */
 	g_signal_connect_swapped(scrolled, "map", G_CALLBACK(watch_layouts), page);
+	GtkEventController *listener = gtk_event_controller_legacy_new();
+	gtk_event_controller_set_propagation_phase(listener, GTK_PHASE_CAPTURE);
+	g_signal_connect(listener, "event", G_CALLBACK(notice_listener), page);
+	gtk_widget_add_controller(scrolled, listener);
 	gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
 	add_smooth_scrolling(GTK_SCROLLED_WINDOW(scrolled));
 	if (page->is_long) {

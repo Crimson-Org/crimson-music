@@ -20,7 +20,7 @@
 
 /* Widgets of one row, looked up again when the row shows another song */
 typedef struct {
-	GtkWidget *revealer, *box, *artwork, *title, *details, *length, *like, *dislike, *love, *add, *play;
+	GtkWidget *revealer, *box, *artwork, *title, *details, *length, *like, *dislike, *love, *add;
 	GtkListItem *item;
 	GtkWidget *list;
 } SongRow;
@@ -376,11 +376,13 @@ static void set_up_row(GtkSignalListItemFactory *factory, GtkListItem *item, Gtk
 	gtk_widget_add_css_class(playing, "playing-icon");
 	gtk_overlay_add_overlay(GTK_OVERLAY(cover), playing);
 	/* Play sits on the cover, at the start of the row where the eye begins */
-	row->play = create_row_action("media-playback-start-symbolic", "row-play-button");
-	gtk_widget_set_tooltip_text(row->play, TEXT_PLAY);
-	g_signal_connect(row->play, "clicked", G_CALLBACK(play_row), row);
-	gtk_widget_set_valign(row->play, GTK_ALIGN_FILL);
-	gtk_overlay_add_overlay(GTK_OVERLAY(cover), row->play);
+	GtkWidget *play = create_row_action("media-playback-start-symbolic", "row-play-button");
+	gtk_widget_set_tooltip_text(play, TEXT_PLAY);
+	g_signal_connect(play, "clicked", G_CALLBACK(play_row), row);
+	gtk_widget_set_valign(play, GTK_ALIGN_FILL);
+	/* Only the keyboard focuses Play, so a click leaves no focus behind that would hide the playing mark */
+	gtk_widget_set_focus_on_click(play, FALSE);
+	gtk_overlay_add_overlay(GTK_OVERLAY(cover), play);
 	gtk_widget_set_valign(cover, GTK_ALIGN_CENTER);
 	gtk_box_append(GTK_BOX(row->box), cover);
 	GtkWidget *labels = gtk_box_new(GTK_ORIENTATION_VERTICAL, SPACING_HAIRLINE);
@@ -412,7 +414,8 @@ static void set_up_row(GtkSignalListItemFactory *factory, GtkListItem *item, Gtk
 	gtk_box_append(GTK_BOX(row->box), row->length);
 	add_row_controllers(row);
 	g_object_set_data_full(G_OBJECT(item), "row", row, g_free);
-	/* Rows open and fold through a revealer, so songs coming and going push the rows below smoothly */
+	/* Rows open and fold through a revealer, so songs come and go smoothly while the list keeps the row it is anchored
+	 * to in place */
 	row->revealer = gtk_revealer_new();
 	gtk_revealer_set_transition_type(GTK_REVEALER(row->revealer), GTK_REVEALER_TRANSITION_TYPE_SLIDE_DOWN);
 	gtk_revealer_set_child(GTK_REVEALER(row->revealer), row->box);
