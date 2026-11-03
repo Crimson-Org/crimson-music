@@ -377,6 +377,12 @@ static void set_up_row(GtkSignalListItemFactory *factory, GtkListItem *item, Gtk
 	GtkWidget *playing = gtk_image_new_from_icon_name("audio-volume-high-symbolic");
 	gtk_widget_add_css_class(playing, "playing-icon");
 	gtk_overlay_add_overlay(GTK_OVERLAY(cover), playing);
+	/* Play sits on the cover, at the start of the row where the eye begins */
+	row->play = create_row_action("media-playback-start-symbolic", "row-play-button");
+	gtk_widget_set_tooltip_text(row->play, TEXT_PLAY);
+	g_signal_connect(row->play, "clicked", G_CALLBACK(play_row), row);
+	gtk_widget_set_valign(row->play, GTK_ALIGN_FILL);
+	gtk_overlay_add_overlay(GTK_OVERLAY(cover), row->play);
 	gtk_widget_set_valign(cover, GTK_ALIGN_CENTER);
 	gtk_box_append(GTK_BOX(row->box), cover);
 	GtkWidget *labels = gtk_box_new(GTK_ORIENTATION_VERTICAL, SPACING_HAIRLINE);
@@ -396,10 +402,6 @@ static void set_up_row(GtkSignalListItemFactory *factory, GtkListItem *item, Gtk
 	row->dislike = create_row_action("crimson-dislike-symbolic", "like-button");
 	g_signal_connect(row->dislike, "clicked", G_CALLBACK(toggle_dislike), row);
 	gtk_box_append(GTK_BOX(row->box), row->dislike);
-	row->play = create_row_action("media-playback-start-symbolic", "row-play-button");
-	gtk_widget_set_tooltip_text(row->play, TEXT_PLAY);
-	g_signal_connect(row->play, "clicked", G_CALLBACK(play_row), row);
-	gtk_box_append(GTK_BOX(row->box), row->play);
 	row->add = create_row_action("list-add-symbolic", NULL);
 	gtk_widget_set_tooltip_text(row->add, TEXT_ADD_SUGGESTION);
 	g_signal_connect(row->add, "clicked", G_CALLBACK(add_suggestion), row);

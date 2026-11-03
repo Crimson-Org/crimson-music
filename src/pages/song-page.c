@@ -22,7 +22,6 @@
 /* The heading shape stands a little taller than a line, and each row's second line is a shorter one two widths on */
 #define SKELETON_HEADING_EXTRA 4
 #define SKELETON_SECOND_LINE_OFFSET 2
-#define SKELETON_WIDTH 1000
 static const int SKELETON_TITLE_WIDTHS[] = {260, 180, 320, 220, 280};
 #define CARD_GRID_SPACING 6
 /* A changed shelf crossfades to its new cards, and a shelf that comes or goes slides open or shut, in this time */
@@ -32,9 +31,6 @@ static const int SKELETON_TITLE_WIDTHS[] = {260, 180, 320, 220, 280};
 #define SHELF_ROWS_KEY "shelf-rows"
 #define HEADING_ARTWORK_SIZE 120
 #define CARD_ARTWORK_SIZE 120
-/* Content stops growing at this width, so lines stay easy to follow on wide windows */
-#define CONTENT_MAXIMUM_WIDTH 1100
-#define CONTENT_TIGHTENING_WIDTH 800
 
 #define SCROLL_HOLD_MICROSECONDS (G_USEC_PER_SEC / 2)
 
@@ -57,7 +53,7 @@ struct SongPage {
 	/* A round picture is a person's own, shown as a round cover beside the title rather than across the heading */
 	gboolean is_profile;
 	/* What Last.fm tells of an artist or album, beside the heading's title */
-	GtkWidget *about, *about_text, *about_facts, *heading_clamp;
+	GtkWidget *about, *about_text, *about_facts;
 	GtkWidget *cards, *songs_heading, *stack, *list, *empty, *skeleton_cards, *scrolled;
 	/* A place to scroll back to once the songs are long enough to reach it, and when to stop waiting for that */
 	double wanted_scroll;
@@ -128,15 +124,6 @@ static GtkWidget *create_pill(const char *icon, const char *label, SongPage *pag
 	gtk_widget_set_valign(button, GTK_ALIGN_CENTER);
 	g_signal_connect(button, "clicked", G_CALLBACK(play_page), page);
 	return button;
-}
-
-
-static GtkWidget *create_clamp(GtkWidget *child) {
-	GtkWidget *clamp = adw_clamp_new();
-	adw_clamp_set_maximum_size(ADW_CLAMP(clamp), CONTENT_MAXIMUM_WIDTH);
-	adw_clamp_set_tightening_threshold(ADW_CLAMP(clamp), CONTENT_TIGHTENING_WIDTH);
-	adw_clamp_set_child(ADW_CLAMP(clamp), child);
-	return clamp;
 }
 
 
@@ -257,7 +244,7 @@ static GtkWidget *create_search_bar(SongPage *page) {
 	g_signal_connect(page->search_entry, "stop-search", G_CALLBACK(stop_search), page);
 	page->search_revealer = gtk_revealer_new();
 	gtk_revealer_set_transition_type(GTK_REVEALER(page->search_revealer), GTK_REVEALER_TRANSITION_TYPE_SLIDE_DOWN);
-	gtk_revealer_set_child(GTK_REVEALER(page->search_revealer), create_clamp(page->search_entry));
+	gtk_revealer_set_child(GTK_REVEALER(page->search_revealer), page->search_entry);
 	return page->search_revealer;
 }
 
@@ -311,11 +298,8 @@ static GtkWidget *create_skeleton(SongPage *page) {
 	gtk_box_append(GTK_BOX(box), page->skeleton_cards);
 	for (guint index = 0; index < SKELETON_ROWS; index++)
 		gtk_box_append(GTK_BOX(box), create_bone_row(index));
-	GtkWidget *clamp = adw_clamp_new();
-	adw_clamp_set_maximum_size(ADW_CLAMP(clamp), SKELETON_WIDTH);
-	adw_clamp_set_child(ADW_CLAMP(clamp), box);
-	gtk_widget_set_valign(clamp, GTK_ALIGN_START);
-	return clamp;
+	gtk_widget_set_valign(box, GTK_ALIGN_START);
+	return box;
 }
 
 
@@ -396,12 +380,11 @@ static GtkWidget *create_heading(SongPage *page) {
 	adw_breakpoint_bin_add_breakpoint(ADW_BREAKPOINT_BIN(room), narrow);
 	GtkWidget *veil = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
 	gtk_widget_add_css_class(veil, "page-veil");
-	page->heading_clamp = create_clamp(room);
-	gtk_box_append(GTK_BOX(veil), page->heading_clamp);
+	gtk_box_append(GTK_BOX(veil), room);
 	/* Every banner is this tall whatever it holds, so moving between pages or loading one never changes its size */
 	gtk_widget_set_size_request(veil, -1, BANNER_HEIGHT);
-	gtk_widget_set_valign(page->heading_clamp, GTK_ALIGN_CENTER);
-	gtk_widget_set_vexpand(page->heading_clamp, TRUE);
+	gtk_widget_set_valign(room, GTK_ALIGN_CENTER);
+	gtk_widget_set_vexpand(room, TRUE);
 	page->backdrop = create_ambience(veil);
 	gtk_widget_set_overflow(page->backdrop, GTK_OVERFLOW_HIDDEN);
 	return page->backdrop;
@@ -433,11 +416,7 @@ static GtkWidget *create_body(SongPage *page) {
 	gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
 	add_smooth_scrolling(GTK_SCROLLED_WINDOW(scrolled));
 	if (page->is_long) {
-		GtkWidget *clamp = adw_clamp_scrollable_new();
-		adw_clamp_scrollable_set_maximum_size(ADW_CLAMP_SCROLLABLE(clamp), CONTENT_MAXIMUM_WIDTH);
-		adw_clamp_scrollable_set_tightening_threshold(ADW_CLAMP_SCROLLABLE(clamp), CONTENT_TIGHTENING_WIDTH);
-		adw_clamp_scrollable_set_child(ADW_CLAMP_SCROLLABLE(clamp), page->list);
-		gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled), clamp);
+		gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled), page->list);
 		return scrolled;
 	}
 	GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, SPACING_NORMAL);
@@ -446,7 +425,7 @@ static GtkWidget *create_body(SongPage *page) {
 	page->songs_heading = create_section_heading(TEXT_SONGS);
 	gtk_box_append(GTK_BOX(box), page->songs_heading);
 	gtk_box_append(GTK_BOX(box), page->list);
-	gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled), create_clamp(box));
+	gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled), box);
 	return scrolled;
 }
 
@@ -548,9 +527,7 @@ void set_song_page_heading(SongPage *page, const char *title, const char *detail
 	/* An artist's picture spreads across the whole heading, so it is fetched far larger than an album's cover */
 	set_cover_resolution(cover, is_banner ? HERO_RESOLUTION : HEADING_RESOLUTION);
 	gtk_widget_set_visible(page->cover_slot, !is_banner);
-	/* Over an artist's picture the heading spans the whole width, its title and buttons near the left edge, lifted
-	 * off the picture by a soft shadow */
-	adw_clamp_set_maximum_size(ADW_CLAMP(page->heading_clamp), is_banner ? G_MAXINT : CONTENT_MAXIMUM_WIDTH);
+	/* Over an artist's picture the heading's title and buttons are lifted off the picture by a soft shadow */
 	if (is_banner)
 		gtk_widget_add_css_class(page->heading, "over-picture");
 	else

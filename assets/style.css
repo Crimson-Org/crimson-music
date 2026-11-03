@@ -56,6 +56,23 @@
 	opacity: 1;
 }
 
+/* Play takes the cover's place under the pointer, so the playing mark steps aside for it */
+row:hover > revealer > .song.playing .playing-icon {
+	opacity: 0;
+}
+
+.song row-action.row-play-button {
+	min-width: 0;
+	min-height: 0;
+	color: white;
+	background-color: alpha(black, 0.45);
+	border-radius: 6px;
+}
+
+.song row-action.row-play-button:hover {
+	background-color: alpha(black, 0.6);
+}
+
 .song .song-title {
 	transition: color 250ms ease-out;
 }
@@ -275,7 +292,7 @@ row-action:focus-visible {
 }
 
 /* Hearts and Play show on the row under the pointer, counting the row's padding around the song, Play stays on the
- * selected row and hearts stay on songs already liked */
+ * selected row unless the song plays, and hearts stay on songs already liked */
 .song .like-button,
 .song .love-button,
 .song .row-play-button {
@@ -285,7 +302,7 @@ row-action:focus-visible {
 
 row:hover > revealer > .song .like-button,
 row:hover > revealer > .song .row-play-button,
-row:selected > revealer > .song .row-play-button,
+row:selected > revealer > .song:not(.playing) .row-play-button,
 .song:hover .like-button,
 .song .row-play-button:focus-visible,
 .song .like-button:focus-visible,
