@@ -29,6 +29,7 @@
 #define NARROW_CONDITION "max-width: 640sp"
 #define REVEAL_MILLISECONDS 400
 #define SEARCH_DELAY_MILLISECONDS 300
+#define PLAY_PAUSE_KEY GDK_KEY_space
 #define LASTFM_AVATAR_SIZE 26
 #define LASTFM_PANEL_CHARACTERS 32
 #define LASTFM_RECENT_PATH "/library"
@@ -878,10 +879,7 @@ static GtkWidget *create_frame(Window *window) {
 
 /* Lists take arrow keys with modifiers for their own cursor, so the player's arrow shortcuts are run before the
  * focused widget sees them, except in a text field with text in it, where they select text */
-static gboolean press_arrow_shortcut(GtkEventControllerKey *controller, guint keyval, guint keycode,
-	GdkModifierType state, Window *window) {
-	GdkModifierType modifiers = state & gtk_accelerator_get_default_mod_mask();
-	GtkWidget *focus = gtk_root_get_focus(GTK_ROOT(window->window));
+static gboolean press_arrow_shortcut(Window *window, guint keyval, GdkModifierType modifiers, GtkWidget *focus) {
 	gboolean is_typing = GTK_IS_TEXT(focus) && *gtk_editable_get_text(GTK_EDITABLE(focus));
 	if ((keyval != GDK_KEY_Left && keyval != GDK_KEY_Right) || !modifiers || is_typing)
 		return FALSE;
@@ -891,6 +889,25 @@ static gboolean press_arrow_shortcut(GtkEventControllerKey *controller, guint ke
 		return FALSE;
 	g_action_group_activate_action(G_ACTION_GROUP(window->window), actions[0] + strlen("win."), NULL);
 	return TRUE;
+}
+
+
+/* Space plays and pauses instead of pressing the last clicked button, but still types in text fields and presses the
+ * focused button in dialogs, which an application shortcut would not allow, since those run inside text fields too */
+static gboolean press_play_pause_key(Window *window, guint keyval, GdkModifierType modifiers, GtkWidget *focus) {
+	gboolean is_in_dialog = focus && gtk_widget_get_ancestor(focus, ADW_TYPE_DIALOG);
+	if (keyval != PLAY_PAUSE_KEY || modifiers || GTK_IS_TEXT(focus) || is_in_dialog)
+		return FALSE;
+	g_action_group_activate_action(G_ACTION_GROUP(window->window), "play-pause", NULL);
+	return TRUE;
+}
+
+
+static gboolean press_player_key(GtkEventControllerKey *controller, guint keyval, guint keycode,
+	GdkModifierType state, Window *window) {
+	GdkModifierType modifiers = state & gtk_accelerator_get_default_mod_mask();
+	GtkWidget *focus = gtk_root_get_focus(GTK_ROOT(window->window));
+	return press_arrow_shortcut(window, keyval, modifiers, focus) || press_play_pause_key(window, keyval, modifiers, focus);
 }
 
 
@@ -936,7 +953,7 @@ static void add_window_actions(Window *window) {
 	add_page_actions(window);
 	GtkEventController *keys = gtk_event_controller_key_new();
 	gtk_event_controller_set_propagation_phase(keys, GTK_PHASE_CAPTURE);
-	g_signal_connect(keys, "key-pressed", G_CALLBACK(press_arrow_shortcut), window);
+	g_signal_connect(keys, "key-pressed", G_CALLBACK(press_player_key), window);
 	gtk_widget_add_controller(GTK_WIDGET(window->window), keys);
 	window->shuffle_action = G_SIMPLE_ACTION(g_action_map_lookup_action(G_ACTION_MAP(window->window), "shuffle"));
 	window->lyrics_action = G_SIMPLE_ACTION(g_action_map_lookup_action(G_ACTION_MAP(window->window), "lyrics"));
