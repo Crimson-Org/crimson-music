@@ -27,7 +27,7 @@
 	const HISTORY_DETAIL = 'Songs you played lately'
 	// Home is read this many pages deep
 	const HOME_PAGE_LIMIT = 8
-	const COMMENTS_CLIENT = {clientName: 'WEB', clientVersion: '2.20250101.00.00'}
+	const YOUTUBE_CLIENT = {clientName: 'WEB', clientVersion: '2.20250101.00.00'}
 	const AUDIO_TRACK = 'MUSIC_VIDEO_TYPE_ATV'
 	const VIDEO_CLASS = 'crimson-video'
 	const VIDEO_STYLE_ID = 'crimson-video-style'
@@ -449,18 +449,48 @@
 	}
 
 
+	// A video from YouTube's own search, with its channel as the artist
+	function readYouTubeVideo(renderer) {
+		if (!renderer.videoId)
+			return undefined
+		const channels = getRuns(renderer.ownerText).filter(run => run.navigationEndpoint?.browseEndpoint)
+		return {
+			id: renderer.videoId,
+			title: readText(renderer.title),
+			artist: channels.map(run => run.text).join(', '),
+			artistId: listArtists(channels),
+			album: '',
+			albumId: '',
+			duration: readText(renderer.lengthText),
+			artwork: getArtwork(renderer.thumbnail),
+			setId: '',
+		}
+	}
+
+
+	// YouTube's own search finds the many videos YouTube Music's search leaves out
+	async function searchYouTube(query) {
+		const response = await callYouTube('search', {query})
+		return findAll(response, 'videoRenderer').map(readYouTubeVideo)
+	}
+
+
 	async function search(query, token) {
 		try {
 			const filters = [SONG_FILTER, ARTIST_FILTER, ALBUM_FILTER, VIDEO_FILTER]
-			const [linked, songs, artists, albums, videos] = await Promise.all([findLinked(query).catch(() => []),
+			const [linked, youtube, songs, artists, albums, videos] = await Promise.all([findLinked(query).catch(() => []),
+				searchYouTube(query).catch(() => []),
 				...filters.map(params => callApi('search', {query, params})
 					.then(response => findAll(response, 'musicResponsiveListItemRenderer')
 						.map(renderer => ({musicResponsiveListItemRenderer: renderer}))))])
+			// The linked video leads, and videos follow the songs in one list, without any found as a song already
+			const found = unique([...linked, ...[...songs, ...videos].map(readSong)].filter(Boolean))
 			send({
 				type: 'search',
 				token,
-				// The linked video leads, and videos follow the songs in one list, without any found as a song already
-				songs: unique([...linked, ...[...songs, ...videos].map(readSong)].filter(Boolean)),
+				songs: found,
+				// YouTube's own results come last, without any YouTube Music found already
+				youtube: unique(youtube.filter(Boolean)).filter(video => !found.some(song => song.id === video.id)),
 				artists: artists.map(readCard).filter(card => card?.kind === ARTIST_PAGE),
 				albums: albums.map(readCard).filter(card => card?.kind === ALBUM_PAGE),
 			})
@@ -627,23 +657,20 @@
 	}
 
 
-	// Comments sit under the video on YouTube itself, so they come from YouTube's own web client, which needs no
-	// sign in, and in the order YouTube's top comments show
-	async function callComments(endpoint, body) {
+	// Comments and the full search are YouTube's own, so they come from YouTube's own web client, which needs no
+	// sign in, and comments come in the order YouTube's top comments show
+	async function callYouTube(endpoint, body) {
 		const context = ytcfg.get('INNERTUBE_CONTEXT')
 		const response = await fetch(`/youtubei/v1/${endpoint}?prettyPrint=false`, {
 			method: 'POST',
 			credentials: 'include',
 			headers: await createHeaders(),
-			body: JSON.stringify({context: {...context, client: {...context.client, ...COMMENTS_CLIENT}}, ...body}),
+			body: JSON.stringify({context: {...context, client: {...context.client, ...YOUTUBE_CLIENT}}, ...body}),
 		})
 		if (!response.ok)
 			throw new Error(`YouTube answered ${response.status}`)
 		return response.json()
 	}
-
-
-
 
 
 	function readCommentPage(answer) {
@@ -676,13 +703,13 @@
 		let page = {comments: [], next: ''}
 		try {
 			if (!token) {
-				const watch = await callComments('next', {videoId: video})
+				const watch = await callYouTube('next', {videoId: video})
 				const section = findAll(watch, 'itemSectionRenderer')
 					.find(item => item.sectionIdentifier === 'comment-item-section')
 				token = findKey(section, 'token')
 			}
 			if (token) {
-				const answer = await callComments('next', {continuation: token})
+				const answer = await callYouTube('next', {continuation: token})
 				page = readCommentPage(answer)
 			}
 		} catch (error) {
@@ -696,7 +723,7 @@
 	async function loadReplies(video, token, id) {
 		let page = {comments: [], next: ''}
 		try {
-			page = readCommentPage(await callComments('next', {continuation: token}))
+			page = readCommentPage(await callYouTube('next', {continuation: token}))
 		} catch (error) {
 			send({type: 'error', message: String(error)})
 		}

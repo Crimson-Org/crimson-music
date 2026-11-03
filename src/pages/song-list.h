@@ -11,7 +11,7 @@ typedef struct {
 	void (*toggle_like)(CrimsonSong *song, gpointer data);
 	void (*toggle_dislike)(CrimsonSong *song, gpointer data);
 	void (*toggle_love)(CrimsonSong *song, gpointer data);
-	/* The + of a suggested song was pressed */
+	/* The + of an extra song was pressed */
 	void (*add_suggestion)(CrimsonSong *song, gpointer data);
 } SongListEvents;
 
@@ -20,10 +20,10 @@ GtkWidget *create_song_list(const SongListEvents *events, gpointer data);
 /* Rows can be dragged to new places only in a reorderable list */
 void set_song_list_songs(GtkWidget *list, GListModel *songs, gboolean is_reorderable);
 void set_song_list_reorderable(GtkWidget *list, gboolean is_reorderable);
-/* Songs offered after the list's own under a heading of their own, each with a button that adds it, or none for
- * NULL */
-void set_song_list_suggestions(GtkWidget *list, GListModel *suggestions);
-gboolean is_suggested_song(CrimsonSong *song);
+/* Songs after the list's own under a heading of their own, each with a button that adds it when addable, or none
+ * for NULL */
+void set_song_list_extras(GtkWidget *list, const char *title, GListModel *extras, gboolean is_addable);
+gboolean is_extra_song(CrimsonSong *song);
 
 /* A song just added slides open the next time its row shows, which is at once when it is on screen */
 void mark_song_arriving(CrimsonSong *song);

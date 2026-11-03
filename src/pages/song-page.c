@@ -56,7 +56,9 @@ struct SongPage {
 	double wanted_scroll;
 	gboolean is_restoring_scroll;
 	gulong restore_handler;
-	GListModel *songs, *suggestions;
+	GListModel *songs, *extras;
+	char *extras_title;
+	gboolean is_extras_addable;
 	/* The search in the heading narrows the page to the songs and cards whose words hold what is typed */
 	GtkWidget *search_button, *search_revealer, *search_entry;
 	GtkFilter *song_filter;
@@ -75,7 +77,8 @@ struct SongPage {
 static void free_song_page(gpointer data) {
 	SongPage *page = data;
 	g_clear_object(&page->songs);
-	g_clear_object(&page->suggestions);
+	g_clear_object(&page->extras);
+	g_free(page->extras_title);
 	g_clear_object(&page->shown_songs);
 	g_clear_object(&page->song_filter);
 	g_clear_pointer(&page->query, g_free);
@@ -97,14 +100,14 @@ static void play_page(GtkButton *button, SongPage *page) {
 }
 
 
-/* A suggestion plays among the other suggestions, never as part of the playlist */
+/* An extra song plays among the other extra songs, never as part of the page's own */
 static void activate_song(GtkListView *list, guint position, SongPage *page) {
 	GListModel *songs = G_LIST_MODEL(page->shown_songs);
 	guint count = g_list_model_get_n_items(songs);
 	if (position < count)
 		page->events->choose(songs, position, page->data);
-	else if (page->suggestions)
-		page->events->choose(page->suggestions, position - count, page->data);
+	else if (page->extras)
+		page->events->choose(page->extras, position - count, page->data);
 }
 
 
@@ -179,6 +182,16 @@ static gboolean filter_cards(GtkWidget *widget, const char *query) {
 }
 
 
+static guint count_shown_extras(SongPage *page) {
+	return page->extras && !page->query ? g_list_model_get_n_items(page->extras) : 0;
+}
+
+
+static void show_extras(SongPage *page) {
+	set_song_list_extras(page->list, page->extras_title, page->query ? NULL : page->extras, page->is_extras_addable);
+}
+
+
 static void filter_page(SongPage *page) {
 	gtk_filter_changed(page->song_filter, GTK_FILTER_CHANGE_DIFFERENT);
 	for (GtkWidget *section = gtk_widget_get_first_child(page->cards); section;
@@ -186,8 +199,8 @@ static void filter_page(SongPage *page) {
 		gtk_widget_set_visible(section, filter_cards(section, page->query));
 	/* Rows keep their places while the songs are narrowed, since a filtered position is not the playlist's own */
 	set_song_list_reorderable(page->list, page->is_reorderable && !page->query);
-	/* Suggestions are no part of the page's own songs, so they step aside while it is searched */
-	set_song_list_suggestions(page->list, page->query ? NULL : page->suggestions);
+	/* Extra songs are no part of the page's own songs, so they step aside while it is searched */
+	show_extras(page);
 	update_song_page(page, page->is_loaded);
 }
 
@@ -632,9 +645,12 @@ void set_song_page_songs(SongPage *page, GListModel *songs, gboolean is_reordera
 }
 
 
-void set_song_page_suggestions(SongPage *page, GListModel *suggestions) {
-	g_set_object(&page->suggestions, suggestions);
-	set_song_list_suggestions(page->list, page->query ? NULL : suggestions);
+void set_song_page_extras(SongPage *page, const char *title, GListModel *extras, gboolean is_addable) {
+	g_set_object(&page->extras, extras);
+	g_free(page->extras_title);
+	page->extras_title = g_strdup(title);
+	page->is_extras_addable = is_addable;
+	show_extras(page);
 }
 
 
@@ -644,11 +660,12 @@ void update_song_page(SongPage *page, gboolean is_loaded) {
 	guint count = page->songs ? g_list_model_get_n_items(page->songs) : 0;
 	guint shown_count = g_list_model_get_n_items(G_LIST_MODEL(page->shown_songs));
 	gboolean has_cards = gtk_widget_get_first_child(page->cards) != NULL;
-	const char *shown = count || has_cards ? "songs" : !is_loaded ? "loading" : "empty";
+	guint extra_count = count_shown_extras(page);
+	const char *shown = count || has_cards || extra_count ? "songs" : !is_loaded ? "loading" : "empty";
 	gtk_stack_set_visible_child_name(GTK_STACK(page->stack), shown);
 	if (page->songs_heading)
 		gtk_widget_set_visible(page->songs_heading, shown_count && has_cards);
-	gtk_widget_set_visible(page->list, shown_count > 0);
+	gtk_widget_set_visible(page->list, shown_count || extra_count);
 	gtk_widget_set_sensitive(page->play_button, shown_count > 0);
 	gtk_widget_set_sensitive(page->shuffle_button, shown_count > 0);
 }

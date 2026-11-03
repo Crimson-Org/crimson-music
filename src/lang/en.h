@@ -100,6 +100,7 @@
 #define TEXT_IN_YOUR_PLAYLISTS "In Your Playlists"
 #define TEXT_SONGS "Songs"
 #define TEXT_SUGGESTIONS "Suggestions"
+#define TEXT_MORE_FROM_YOUTUBE "More from YouTube"
 #define TEXT_ADD_SUGGESTION "Add to Playlist"
 #define TEXT_ALBUMS "Albums"
 #define TEXT_ALBUMS_AND_SINGLES "Albums and Singles"

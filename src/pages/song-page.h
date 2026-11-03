@@ -32,8 +32,8 @@ void set_song_page_heading(SongPage *page, const char *title, const char *detail
 	gboolean is_round);
 /* Sliding the page in is only for a page that now shows something else, never for a refresh */
 void set_song_page_songs(SongPage *page, GListModel *songs, gboolean is_reorderable, gboolean is_entering);
-/* Songs to add, after the page's own, or none for NULL */
-void set_song_page_suggestions(SongPage *page, GListModel *suggestions);
+/* Songs after the page's own under the title, which offer to be added when addable, or none for NULL */
+void set_song_page_extras(SongPage *page, const char *title, GListModel *extras, gboolean is_addable);
 /* Shows a spinner until the songs are known, then the songs or the empty state */
 void update_song_page(SongPage *page, gboolean is_loaded);
 /* Shows hearts only under the pointer, for a list where every song is liked */

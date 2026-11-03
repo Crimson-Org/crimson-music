@@ -326,8 +326,8 @@ static double read_number(JSCValue *message, const char *name) {
 }
 
 
-static GListModel *create_song_store(JSCValue *message) {
-	g_autoptr(JSCValue) array = jsc_value_object_get_property(message, "songs");
+static GListModel *create_song_store(JSCValue *message, const char *name) {
+	g_autoptr(JSCValue) array = jsc_value_object_get_property(message, name);
 	g_autoptr(GPtrArray) songs = read_songs(array);
 	GListStore *store = g_list_store_new(CRIMSON_TYPE_SONG);
 	g_list_store_splice(store, 0, 0, songs->pdata, songs->len);
@@ -397,7 +397,7 @@ static void fill_similar(Window *window, JSCValue *message, gboolean is_artists)
 		set_song_page_songs(page, none, FALSE, TRUE);
 		make_artists_collage(window, window->similar_tag, cards);
 	} else {
-		g_autoptr(GListModel) songs = create_song_store(message);
+		g_autoptr(GListModel) songs = create_song_store(message, "songs");
 		set_song_page_songs(page, songs, FALSE, TRUE);
 	}
 	update_song_page(page, TRUE);
@@ -419,9 +419,11 @@ static void fill_search(Window *window, JSCValue *message) {
 		if (section)
 			g_ptr_array_add(window->online_results, section);
 	}
-	g_autoptr(GListModel) songs = create_song_store(message);
+	g_autoptr(GListModel) songs = create_song_store(message, "songs");
+	g_autoptr(GListModel) youtube = create_song_store(message, "youtube");
 	set_song_page_empty_title(page, TEXT_NO_RESULTS);
 	set_song_page_songs(page, songs, FALSE, TRUE);
+	set_song_page_extras(page, TEXT_MORE_FROM_YOUTUBE, g_list_model_get_n_items(youtube) ? youtube : NULL, FALSE);
 	update_song_page(page, TRUE);
 }
 
@@ -542,7 +544,7 @@ static void fill_collection(Window *window, JSCValue *message, gboolean is_artis
 	if (is_artist)
 		add_cards(page, message, "albums", TEXT_ALBUMS_AND_SINGLES, FALSE);
 	/* The page slid in already, so its contents crossfade in from the waiting shapes without moving it again */
-	g_autoptr(GListModel) songs = create_song_store(message);
+	g_autoptr(GListModel) songs = create_song_store(message, "songs");
 	g_object_set_data(G_OBJECT(songs), SONG_COUNT_KEY, GINT_TO_POINTER(read_number(message, "songCount")));
 	set_song_page_songs(page, songs, FALSE, FALSE);
 	update_song_page(page, TRUE);
@@ -701,11 +703,11 @@ static gboolean has_suggestions(CrimsonPlaylist *playlist) {
 void show_suggestions(Window *window) {
 	CrimsonPlaylist *playlist = window->shown;
 	if (!has_suggestions(playlist)) {
-		set_song_page_suggestions(window->playlist_page, NULL);
+		set_song_page_extras(window->playlist_page, NULL, NULL, FALSE);
 		return;
 	}
 	GListModel *suggestions = g_hash_table_lookup(window->suggestions, playlist->id);
-	set_song_page_suggestions(window->playlist_page, suggestions);
+	set_song_page_extras(window->playlist_page, TEXT_SUGGESTIONS, suggestions, TRUE);
 	if (!suggestions && window->is_signed_in) {
 		g_hash_table_insert(window->suggestions, g_strdup(playlist->id), g_list_store_new(CRIMSON_TYPE_SONG));
 		request_suggestions(window->engine, playlist->id);
@@ -715,7 +717,7 @@ void show_suggestions(Window *window) {
 
 static void fill_suggestions(Window *window, JSCValue *message) {
 	g_autofree char *playlist_id = read_text(message, "playlist");
-	g_autoptr(GListModel) songs = create_song_store(message);
+	g_autoptr(GListModel) songs = create_song_store(message, "songs");
 	g_hash_table_insert(window->suggestions, g_steal_pointer(&playlist_id), g_steal_pointer(&songs));
 	show_suggestions(window);
 }
@@ -1149,7 +1151,7 @@ static GMenu *create_song_menu(Window *window, CrimsonSong *song) {
 	g_menu_append(making, TEXT_NEW_LOCAL_PLAYLIST_WITH_SONG, "win.new-local-playlist-with-song");
 	g_menu_append_section(playlists, NULL, G_MENU_MODEL(making));
 	g_menu_append_submenu(menu, TEXT_ADD_TO_PLAYLIST, G_MENU_MODEL(playlists));
-	if (is_showing_playlist(window) && window->shown && window->shown->is_editable && !is_suggested_song(song))
+	if (is_showing_playlist(window) && window->shown && window->shown->is_editable && !is_extra_song(song))
 		g_menu_append(menu, TEXT_REMOVE_FROM_PLAYLIST, "win.remove-from-playlist");
 	/* A local song found in several formats lets the listener pick which one plays, the current one marked */
 	g_autoptr(GPtrArray) versions = is_local_song(song->id) ? list_local_versions(song->id) : NULL;

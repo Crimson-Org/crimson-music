@@ -30,8 +30,11 @@ typedef struct {
 	const SongListEvents *events;
 	gpointer data;
 	gboolean is_reorderable;
-	GListModel *songs, *suggestions;
-	/* The songs and the suggestions as the two sections the list shows */
+	GListModel *songs, *extras;
+	/* The heading over the extra songs, and whether each of them offers to be added to the list */
+	char *extras_title;
+	gboolean is_extras_addable;
+	/* The songs and the extra songs as the two sections the list shows */
 	GListStore *parts;
 } SongListSetup;
 
@@ -76,11 +79,18 @@ static gboolean is_love_shown;
 static GPtrArray *followers;
 
 #define FOLLOWED_VIDEO_KEY "followed-video"
-#define SUGGESTED_KEY "suggested"
+#define EXTRA_KEY "extra"
 
 
-gboolean is_suggested_song(CrimsonSong *song) {
-	return song && g_object_get_data(G_OBJECT(song), SUGGESTED_KEY) != NULL;
+gboolean is_extra_song(CrimsonSong *song) {
+	return song && g_object_get_data(G_OBJECT(song), EXTRA_KEY) != NULL;
+}
+
+
+/* An extra song that can be added shows its + where the like and heart would be */
+static gboolean offers_add(SongRow *row) {
+	SongListSetup *setup = g_object_get_data(G_OBJECT(row->list), "setup");
+	return setup->is_extras_addable && is_extra_song(gtk_list_item_get_item(row->item));
 }
 
 
@@ -152,7 +162,7 @@ gboolean is_video_liked(const char *video_id) {
 static void show_loved(SongRow *row) {
 	CrimsonSong *song = gtk_list_item_get_item(row->item);
 	gboolean is_loved = song && love_check && love_check(song);
-	gtk_widget_set_visible(row->love, is_love_shown && !is_suggested_song(song));
+	gtk_widget_set_visible(row->love, is_love_shown && !offers_add(row));
 	gtk_button_set_icon_name(GTK_BUTTON(row->love), is_loved ? "crimson-heart-filled-symbolic" : "crimson-heart-symbolic");
 	gtk_widget_set_tooltip_text(row->love, is_loved ? TEXT_UNLOVE : TEXT_LOVE);
 	if (is_loved)
@@ -175,7 +185,7 @@ static void show_liked(SongRow *row) {
 	CrimsonSong *song = gtk_list_item_get_item(row->item);
 	gboolean is_liked = song && is_video_liked(song->id);
 	/* Local songs are not on YouTube, so there is nothing to like */
-	gtk_widget_set_visible(row->like, !is_suggested_song(song) && !(song && is_local_song(song->id)));
+	gtk_widget_set_visible(row->like, !offers_add(row) && !(song && is_local_song(song->id)));
 	gtk_button_set_icon_name(GTK_BUTTON(row->like), is_liked ? "crimson-like-filled-symbolic" : "crimson-like-symbolic");
 	gtk_widget_set_tooltip_text(row->like, is_liked ? TEXT_UNLIKE : TEXT_LIKE);
 	if (is_liked)
@@ -267,13 +277,13 @@ static void open_menu(GtkGestureClick *gesture, int presses, double x, double y,
 
 
 /* A song drags as itself, for dropping on a playlist, and as its place, for moving it within its own list, which
- * suggestions are no part of */
+ * extra songs are no part of */
 static GdkContentProvider *start_drag(GtkDragSource *source, double x, double y, SongRow *row) {
 	CrimsonSong *song = gtk_list_item_get_item(row->item);
 	if (!song)
 		return NULL;
 	gtk_drag_source_set_icon(source, gtk_widget_paintable_new(row->box), (int)x, (int)y);
-	if (is_suggested_song(song))
+	if (is_extra_song(song))
 		return gdk_content_provider_new_typed(CRIMSON_TYPE_SONG, song);
 	GdkContentProvider *contents[] = {
 		gdk_content_provider_new_typed(CRIMSON_TYPE_SONG, song),
@@ -287,7 +297,7 @@ static gboolean drop_song(GtkDropTarget *target, const GValue *value, double x, 
 	SongListSetup *setup = g_object_get_data(G_OBJECT(row->list), "setup");
 	gtk_widget_remove_css_class(row->box, DROP_CLASS);
 	guint from = g_value_get_uint(value), to = gtk_list_item_get_position(row->item);
-	if (!setup->is_reorderable || from == to || is_suggested_song(gtk_list_item_get_item(row->item)))
+	if (!setup->is_reorderable || from == to || is_extra_song(gtk_list_item_get_item(row->item)))
 		return FALSE;
 	setup->events->move_song(from, to, setup->data);
 	return TRUE;
@@ -296,7 +306,7 @@ static gboolean drop_song(GtkDropTarget *target, const GValue *value, double x, 
 
 static GdkDragAction enter_drop(GtkDropTarget *target, double x, double y, SongRow *row) {
 	SongListSetup *setup = g_object_get_data(G_OBJECT(row->list), "setup");
-	if (!setup->is_reorderable || is_suggested_song(gtk_list_item_get_item(row->item)))
+	if (!setup->is_reorderable || is_extra_song(gtk_list_item_get_item(row->item)))
 		return 0;
 	gtk_widget_add_css_class(row->box, DROP_CLASS);
 	return GDK_ACTION_MOVE;
@@ -433,7 +443,7 @@ static void bind_row(GtkSignalListItemFactory *factory, GtkListItem *item, gpoin
 	gtk_widget_set_visible(row->details, *details != '\0');
 	gtk_label_set_text(GTK_LABEL(row->length), song->duration);
 	show_artwork(row->artwork, song->artwork);
-	gtk_widget_set_visible(row->add, is_suggested_song(song));
+	gtk_widget_set_visible(row->add, offers_add(row));
 	gint64 *arrived = g_object_get_data(G_OBJECT(song), ARRIVING_KEY);
 	gboolean is_arriving = arrived && g_get_monotonic_time() - *arrived < ARRIVAL_MICROSECONDS;
 	g_object_set_data(G_OBJECT(song), ARRIVING_KEY, NULL);
@@ -511,25 +521,29 @@ void fold_song_away(CrimsonSong *song, SongFolded done, gpointer data) {
 }
 
 
-/* Every section of the list gets a header, and only the suggestions show theirs */
+/* Every section of the list gets a header, and only the extra songs show theirs */
 static void set_up_header(GtkSignalListItemFactory *factory, GtkListHeader *header, gpointer data) {
-	GtkWidget *label = gtk_label_new(TEXT_SUGGESTIONS);
+	GtkWidget *label = gtk_label_new(NULL);
 	gtk_label_set_xalign(GTK_LABEL(label), 0);
 	gtk_widget_add_css_class(label, "title-4");
-	gtk_widget_add_css_class(label, "suggestions-heading");
+	gtk_widget_add_css_class(label, "extras-heading");
 	gtk_list_header_set_child(header, label);
 }
 
 
-static void bind_header(GtkSignalListItemFactory *factory, GtkListHeader *header, gpointer data) {
-	gtk_widget_set_visible(gtk_list_header_get_child(header), is_suggested_song(gtk_list_header_get_item(header)));
+static void bind_header(GtkSignalListItemFactory *factory, GtkListHeader *header, GtkWidget *list) {
+	SongListSetup *setup = g_object_get_data(G_OBJECT(list), "setup");
+	GtkWidget *label = gtk_list_header_get_child(header);
+	gtk_label_set_text(GTK_LABEL(label), setup->extras_title);
+	gtk_widget_set_visible(label, is_extra_song(gtk_list_header_get_item(header)));
 }
 
 
 static void free_setup(gpointer data) {
 	SongListSetup *setup = data;
 	g_clear_object(&setup->songs);
-	g_clear_object(&setup->suggestions);
+	g_clear_object(&setup->extras);
+	g_free(setup->extras_title);
 	g_clear_object(&setup->parts);
 	g_free(setup);
 }
@@ -539,11 +553,11 @@ GtkWidget *create_song_list(const SongListEvents *events, gpointer data) {
 	GtkListItemFactory *factory = gtk_signal_list_item_factory_new();
 	GtkWidget *list = gtk_list_view_new(NULL, factory);
 	SongListSetup *setup = g_new0(SongListSetup, 1);
-	*setup = (SongListSetup){events, data, FALSE, NULL, NULL, NULL};
+	*setup = (SongListSetup){.events = events, .data = data};
 	g_object_set_data_full(G_OBJECT(list), "setup", setup, free_setup);
 	GtkListItemFactory *headers = gtk_signal_list_item_factory_new();
 	g_signal_connect(headers, "setup", G_CALLBACK(set_up_header), NULL);
-	g_signal_connect(headers, "bind", G_CALLBACK(bind_header), NULL);
+	g_signal_connect(headers, "bind", G_CALLBACK(bind_header), list);
 	gtk_list_view_set_header_factory(GTK_LIST_VIEW(list), headers);
 	g_object_unref(headers);
 	g_signal_connect(factory, "setup", G_CALLBACK(set_up_row), list);
@@ -555,14 +569,14 @@ GtkWidget *create_song_list(const SongListEvents *events, gpointer data) {
 }
 
 
-/* The list's own songs and the suggestions after them are the two sections of one model, where a click selects a
+/* The list's own songs and the extra songs after them are the two sections of one model, where a click selects a
  * song and a double click or Enter plays it */
 static void show_list_model(GtkWidget *list, SongListSetup *setup) {
 	g_clear_object(&setup->parts);
 	setup->parts = g_list_store_new(G_TYPE_LIST_MODEL);
 	g_list_store_append(setup->parts, setup->songs);
-	if (setup->suggestions)
-		g_list_store_append(setup->parts, setup->suggestions);
+	if (setup->extras)
+		g_list_store_append(setup->parts, setup->extras);
 	g_autoptr(GtkSingleSelection) selection = gtk_single_selection_new(G_LIST_MODEL(gtk_flatten_list_model_new(
 		G_LIST_MODEL(g_object_ref(setup->parts)))));
 	gtk_single_selection_set_autoselect(selection, FALSE);
@@ -580,22 +594,25 @@ void set_song_list_songs(GtkWidget *list, GListModel *songs, gboolean is_reorder
 }
 
 
-void set_song_list_suggestions(GtkWidget *list, GListModel *suggestions) {
+void set_song_list_extras(GtkWidget *list, const char *title, GListModel *extras, gboolean is_addable) {
 	SongListSetup *setup = g_object_get_data(G_OBJECT(list), "setup");
-	if (setup->suggestions == suggestions)
+	if (setup->extras == extras)
 		return;
-	g_set_object(&setup->suggestions, suggestions);
-	for (guint index = 0; suggestions && index < g_list_model_get_n_items(suggestions); index++) {
-		g_autoptr(CrimsonSong) song = g_list_model_get_item(suggestions, index);
-		g_object_set_data(G_OBJECT(song), SUGGESTED_KEY, GINT_TO_POINTER(TRUE));
+	g_set_object(&setup->extras, extras);
+	g_free(setup->extras_title);
+	setup->extras_title = g_strdup(title);
+	setup->is_extras_addable = is_addable;
+	for (guint index = 0; extras && index < g_list_model_get_n_items(extras); index++) {
+		g_autoptr(CrimsonSong) song = g_list_model_get_item(extras, index);
+		g_object_set_data(G_OBJECT(song), EXTRA_KEY, GINT_TO_POINTER(TRUE));
 		mark_song_arriving(song);
 	}
-	/* Only the suggestions section changes, so the songs above keep their place and the new rows slide open */
+	/* Only the extra section changes, so the songs above keep their place and the new rows slide open */
 	if (!setup->parts)
 		return;
 	guint count = g_list_model_get_n_items(G_LIST_MODEL(setup->parts));
-	gpointer added[] = {suggestions};
-	g_list_store_splice(setup->parts, 1, count - 1, added, suggestions ? 1 : 0);
+	gpointer added[] = {extras};
+	g_list_store_splice(setup->parts, 1, count - 1, added, extras ? 1 : 0);
 }
 
 
