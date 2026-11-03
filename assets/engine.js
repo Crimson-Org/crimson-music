@@ -72,6 +72,8 @@
 	const ARTIST_FILTER = 'EgWKAQIgAWoSEAUQCRADEAoQBBAQEA4QFRAR'
 	const ALBUM_FILTER = 'EgWKAQIYAWoSEAUQCRADEAoQBBAQEA4QFRAR'
 	const VIDEO_FILTER = 'EgWKAQIQAWoSEAUQCRADEAoQBBAQEA4QFRAR'
+	// A video id alone, or inside a YouTube or YouTube Music link
+	const VIDEO_LINK = /^(?:\S*(?:[?&]v=|youtu\.be\/|\/shorts\/|\/embed\/|\/live\/))?([\w-]{11})(?:[?&#]\S*)?$/
 
 	const send = message => window.webkit.messageHandlers.crimson.postMessage(message)
 	const getPlayer = () => document.getElementById('movie_player')
@@ -436,18 +438,29 @@
 	}
 
 
+	// YouTube Music's search leaves out many videos it still plays, so a pasted link or video id is looked up as
+	// itself, through the queue YouTube Music builds for it
+	async function findLinked(query) {
+		const video = query.trim().match(VIDEO_LINK)?.[1]
+		if (!video)
+			return []
+		const response = await callApi('next', {videoId: video, isAudioOnly: true})
+		return [readPanelSong(findAll(response, 'playlistPanelVideoRenderer').find(item => item.videoId === video))]
+	}
+
+
 	async function search(query, token) {
 		try {
 			const filters = [SONG_FILTER, ARTIST_FILTER, ALBUM_FILTER, VIDEO_FILTER]
-			const [songs, artists, albums, videos] = await Promise.all(filters.map(params =>
-				callApi('search', {query, params}).then(response => findAll(response, 'musicResponsiveListItemRenderer')
-					.map(renderer => ({musicResponsiveListItemRenderer: renderer})))))
+			const [linked, songs, artists, albums, videos] = await Promise.all([findLinked(query).catch(() => []),
+				...filters.map(params => callApi('search', {query, params})
+					.then(response => findAll(response, 'musicResponsiveListItemRenderer')
+						.map(renderer => ({musicResponsiveListItemRenderer: renderer}))))])
 			send({
 				type: 'search',
 				token,
-				// Videos follow the songs in one list, without any found as a song already
-				songs: [...songs, ...videos].map(readSong).filter(Boolean)
-					.filter((song, index, all) => all.findIndex(other => other.id === song.id) === index),
+				// The linked video leads, and videos follow the songs in one list, without any found as a song already
+				songs: unique([...linked, ...[...songs, ...videos].map(readSong)].filter(Boolean)),
 				artists: artists.map(readCard).filter(card => card?.kind === ARTIST_PAGE),
 				albums: albums.map(readCard).filter(card => card?.kind === ALBUM_PAGE),
 			})
