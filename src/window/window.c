@@ -51,8 +51,11 @@ CrimsonPlaylist *find_playlist(Window *window, const char *playlist_id) {
 }
 
 
+/* Messages carry song names and YouTube's own error text, so they show as plain text, never as markup */
 void show_message(Window *window, const char *text) {
-	adw_toast_overlay_add_toast(ADW_TOAST_OVERLAY(window->toasts), adw_toast_new(text));
+	AdwToast *toast = adw_toast_new(text);
+	adw_toast_set_use_markup(toast, FALSE);
+	adw_toast_overlay_add_toast(ADW_TOAST_OVERLAY(window->toasts), toast);
 }
 
 

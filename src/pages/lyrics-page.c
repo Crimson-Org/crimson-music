@@ -129,7 +129,9 @@ void show_lyrics(GtkWidget *page, const char *title, const char *artist, const c
 	fill_lines(parts, lines, text);
 	gtk_label_set_text(GTK_LABEL(parts->source), source ? source : "");
 	gtk_widget_set_visible(parts->source, source && *source);
-	adw_status_page_set_description(ADW_STATUS_PAGE(parts->empty), title);
+	/* The description reads markup, so a title such as "Drive Around & More" is escaped first */
+	g_autofree char *escaped_title = g_markup_escape_text(title ? title : "", -1);
+	adw_status_page_set_description(ADW_STATUS_PAGE(parts->empty), escaped_title);
 	/* No text at all means the words are still on their way, which shows the title alone rather than none */
 	gboolean has_words = is_timed || !text || *text;
 	gtk_stack_set_visible_child_name(GTK_STACK(parts->stack), has_words ? "lyrics" : "empty");
