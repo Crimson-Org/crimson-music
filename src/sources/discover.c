@@ -36,9 +36,9 @@ static void free_mix(gpointer data) {
 static gboolean open_database(void) {
 	if (database)
 		return TRUE;
-	g_autofree char *folder = g_build_filename(g_get_user_data_dir(), get_application_identity()->slug, NULL);
+	g_autofree char *path = get_data_file_path(DATABASE_FILE);
+	g_autofree char *folder = g_path_get_dirname(path);
 	make_private_folder(folder);
-	g_autofree char *path = g_build_filename(folder, DATABASE_FILE, NULL);
 	char *error = NULL;
 	if (sqlite3_open(path, &database) != SQLITE_OK || sqlite3_exec(database, SCHEMA, NULL, NULL, &error) != SQLITE_OK) {
 		g_warning("Discover mixes did not open: %s", error ? error : sqlite3_errmsg(database));

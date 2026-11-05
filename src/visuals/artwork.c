@@ -419,10 +419,7 @@ static void free_cover_work(CoverWork *work) {
 static void load_in_thread(GTask *task, gpointer source, gpointer data, GCancellable *cancellable) {
 	CoverWork *work = data;
 	if (work->was_downloaded) {
-		g_autofree char *directory = g_path_get_dirname(work->path);
-		make_private_folder(directory);
-		g_file_set_contents(work->path, g_bytes_get_data(work->bytes, NULL), (gssize)g_bytes_get_size(work->bytes),
-			NULL);
+		save_file_bytes(work->path, g_bytes_get_data(work->bytes, NULL), g_bytes_get_size(work->bytes), FALSE);
 	} else {
 		g_autoptr(GFile) file = g_file_new_for_path(work->path);
 		work->bytes = g_file_load_bytes(file, NULL, NULL, NULL);

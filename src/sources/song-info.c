@@ -102,9 +102,9 @@ static void run_sql(const char *sql) {
 
 /* Every field is a column, added to an older database when a new field appears */
 static void open_database(void) {
-	g_autofree char *folder = g_build_filename(g_get_user_data_dir(), get_application_identity()->slug, NULL);
+	g_autofree char *path = get_data_file_path(DATABASE_FILE);
+	g_autofree char *folder = g_path_get_dirname(path);
 	make_private_folder(folder);
-	g_autofree char *path = g_build_filename(folder, DATABASE_FILE, NULL);
 	if (sqlite3_open(path, &database) != SQLITE_OK) {
 		g_warning("Song information store did not open: %s", sqlite3_errmsg(database));
 		return;

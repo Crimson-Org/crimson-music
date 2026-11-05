@@ -758,7 +758,7 @@ gboolean is_local_playlist(CrimsonPlaylist *playlist) {
 
 
 static char *get_local_playlists_path(void) {
-	return g_build_filename(g_get_user_data_dir(), get_application_identity()->slug, LOCAL_PLAYLISTS_FILE, NULL);
+	return get_data_file_path(LOCAL_PLAYLISTS_FILE);
 }
 
 

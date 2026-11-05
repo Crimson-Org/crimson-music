@@ -134,9 +134,7 @@ static void save_index(GPtrArray *entries) {
 	}
 	g_autoptr(GVariant) value = g_variant_ref_sink(g_variant_builder_end(&builder));
 	g_autofree char *path = get_cache_file(INDEX_FILE);
-	g_autofree char *directory = g_path_get_dirname(path);
-	make_private_folder(directory);
-	g_file_set_contents(path, g_variant_get_data(value), (gssize)g_variant_get_size(value), NULL);
+	save_file_bytes(path, g_variant_get_data(value), g_variant_get_size(value), FALSE);
 }
 
 
@@ -196,7 +194,7 @@ static gboolean is_better(const Entry *a, const Entry *b) {
 
 
 static char *get_choices_path(void) {
-	return g_build_filename(g_get_user_state_dir(), get_application_identity()->slug, CHOICES_FILE, NULL);
+	return get_state_file_path(CHOICES_FILE);
 }
 
 
@@ -221,9 +219,7 @@ static void save_choices(void) {
 	while (g_hash_table_iter_next(&iter, &key, &value))
 		g_key_file_set_string(file, CHOICES_GROUP, key, value);
 	g_autofree char *path = get_choices_path();
-	g_autofree char *directory = g_path_get_dirname(path);
-	make_private_folder(directory);
-	g_key_file_save_to_file(file, path, NULL);
+	save_key_file(file, path);
 }
 
 
@@ -401,10 +397,8 @@ static char *save_cover(GstSample *sample) {
 	g_autofree char *name = g_compute_checksum_for_data(G_CHECKSUM_SHA1, map.data, map.size);
 	g_autofree char *folder = get_cache_file(COVERS_FOLDER);
 	char *path = g_build_filename(folder, name, NULL);
-	if (!g_file_test(path, G_FILE_TEST_EXISTS)) {
-		make_private_folder(folder);
-		g_file_set_contents(path, (const char *)map.data, (gssize)map.size, NULL);
-	}
+	if (!g_file_test(path, G_FILE_TEST_EXISTS))
+		save_file_bytes(path, map.data, map.size, FALSE);
 	gst_buffer_unmap(buffer, &map);
 	return path;
 }

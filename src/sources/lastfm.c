@@ -282,7 +282,7 @@ static char *read_picture_address(const char *text) {
 
 /* The picture is kept on disk, so the next launch shows it at once rather than the initial first */
 static char *get_picture_path(void) {
-	return g_build_filename(g_get_user_cache_dir(), get_application_identity()->slug, PICTURE_FILE, NULL);
+	return get_cache_file_path(PICTURE_FILE);
 }
 
 
@@ -300,9 +300,7 @@ static void receive_picture(GObject *source, GAsyncResult *result, gpointer data
 	if (!texture || !session_key)
 		return;
 	g_autofree char *path = get_picture_path();
-	g_autofree char *folder = g_path_get_dirname(path);
-	make_private_folder(folder);
-	g_file_set_contents(path, g_bytes_get_data(bytes, NULL), (gssize)g_bytes_get_size(bytes), NULL);
+	save_file_bytes(path, g_bytes_get_data(bytes, NULL), g_bytes_get_size(bytes), FALSE);
 	g_set_object(&picture, texture);
 	notify();
 }

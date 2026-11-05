@@ -188,26 +188,31 @@ static gboolean retry_loading(gpointer data) {
 }
 
 
-/* A page that could not load before it got ready is tried again later, waiting longer each time */
-static gboolean notice_load_failure(WebKitWebView *view, WebKitLoadEvent event, char *address, GError *error,
-	Engine *engine) {
-	if (engine->is_ready || engine->retry_source || g_error_matches(error, WEBKIT_NETWORK_ERROR,
-		WEBKIT_NETWORK_ERROR_CANCELLED))
-		return FALSE;
+/* The page loads again later, waiting longer after each failure until it gets ready, so a page that keeps failing
+ * never reloads without pause */
+static void retry_later(Engine *engine, const char *reason) {
+	if (engine->retry_source)
+		return;
 	engine->retry_seconds = engine->retry_seconds ? MIN(engine->retry_seconds * 2, LONGEST_RETRY_SECONDS)
 		: FIRST_RETRY_SECONDS;
-	g_warning("YouTube Music did not load, so it is tried again in %u seconds: %s", engine->retry_seconds,
-		error->message);
+	g_warning("YouTube Music loads again in %u seconds: %s", engine->retry_seconds, reason);
 	engine->retry_source = g_timeout_add_seconds(engine->retry_seconds, retry_loading, engine);
+}
+
+
+static gboolean notice_load_failure(WebKitWebView *view, WebKitLoadEvent event, char *address, GError *error,
+	Engine *engine) {
+	if (engine->is_ready || g_error_matches(error, WEBKIT_NETWORK_ERROR, WEBKIT_NETWORK_ERROR_CANCELLED))
+		return FALSE;
+	retry_later(engine, error->message);
 	return TRUE;
 }
 
 
 /* A page whose web process stopped loads again, and calls wait until it is ready */
 static void restart_page(WebKitWebView *view, WebKitWebProcessTerminationReason reason, Engine *engine) {
-	g_warning("The YouTube Music page stopped, so it loads again");
 	engine->is_ready = FALSE;
-	webkit_web_view_load_uri(engine->view, START_ADDRESS);
+	retry_later(engine, "the page stopped");
 }
 
 
