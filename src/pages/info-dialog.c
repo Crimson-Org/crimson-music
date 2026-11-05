@@ -1,12 +1,14 @@
 #include "lang/en.h"
 #include "visuals/artwork.h"
-#include "visuals/dialogs.h"
+#include "common/widgets/dialogs.h"
 #include "dynamic/dynamic.h"
 #include "pages/info-dialog.h"
 #include "sources/lastfm.h"
 #include "app/settings.h"
 #include "sources/song-info.h"
-#include "common/spacing.h"
+#include "common/widgets/spacing.h"
+#include "common/widgets/loading.h"
+#include "common/text/numbers.h"
 
 #define DIALOG_WIDTH 560
 #define DIALOG_HEIGHT 680
@@ -16,7 +18,6 @@
 #define TEXT_LINES 3
 #define TITLE_LINES 2
 /* Counts are grouped in thousands with a narrow space between, and a date starts with its four digit year */
-#define DIGITS_PER_GROUP 3
 #define GROUP_SEPARATOR 0x202F
 #define YEAR_LENGTH 4
 #define SHORT_TEXT 280
@@ -35,19 +36,6 @@ static GtkWidget *open_chips;
 /* What the page was filled from, so a change of the listener's tags alone leaves the page and its scrolling be */
 static const SongInfo *shown_info;
 static gboolean was_gathering;
-
-/* Digits in groups of three, as in 881 763 012 */
-static char *format_count(const char *digits) {
-	GString *text = g_string_new(NULL);
-	size_t length = strlen(digits);
-	for (size_t index = 0; index < length; index++) {
-		if (index > 0 && (length - index) % DIGITS_PER_GROUP == 0)
-			g_string_append_unichar(text, GROUP_SEPARATOR);
-		g_string_append_c(text, digits[index]);
-	}
-	return g_string_free(text, FALSE);
-}
-
 
 /* Pieces ================================================================== */
 
@@ -97,7 +85,8 @@ static void add_fact(GtkWidget *facts, const char *title, const char *value) {
 
 
 static void add_count_fact(GtkWidget *facts, const char *title, const char *digits) {
-	g_autofree char *count = digits && *digits && !g_str_equal(digits, "0") ? format_count(digits) : NULL;
+	guint64 number = digits ? g_ascii_strtoull(digits, NULL, 10) : 0;
+	g_autofree char *count = number ? format_count(number) : NULL;
 	add_fact(facts, title, count);
 }
 
@@ -431,6 +420,7 @@ static void fill_page(void) {
 		GtkWidget *label = gtk_label_new(is_known ? TEXT_GATHERING_AGAIN : TEXT_GATHERING);
 		gtk_widget_add_css_class(label, "dimmed");
 		gtk_box_append(GTK_BOX(status), label);
+		reveal_after_delay(status, NULL, NULL);
 		gtk_box_append(GTK_BOX(page), status);
 	}
 	fill_facts(page, id);
@@ -452,7 +442,10 @@ static void fill_page(void) {
 }
 
 
+/* An older dialog may say it closed after a new one opened, which keeps the new one's details */
 static void forget_dialog(AdwDialog *dialog, gpointer data) {
+	if (dialog != open_dialog)
+		return;
 	open_dialog = NULL;
 	g_clear_pointer(&lastfm_details, g_hash_table_unref);
 	g_clear_object(&open_song);
@@ -462,7 +455,7 @@ static void forget_dialog(AdwDialog *dialog, gpointer data) {
 void show_info_dialog(GtkWidget *parent, CrimsonSong *song) {
 	if (open_dialog)
 		adw_dialog_force_close(open_dialog);
-	open_song = g_object_ref(song);
+	g_set_object(&open_song, song);
 	open_dialog = adw_dialog_new();
 	adw_dialog_set_title(open_dialog, song->title);
 	adw_dialog_set_content_width(open_dialog, DIALOG_WIDTH);

@@ -1,10 +1,11 @@
 #include "lang/en.h"
 #include "visuals/artwork.h"
-#include "common/startup.h"
+#include "common/app/startup.h"
 #include "sources/library.h"
 #include "sources/local-library.h"
 #include "pages/song-list.h"
-#include "common/spacing.h"
+#include "common/widgets/spacing.h"
+#include "visuals/motion.h"
 
 #define ARTWORK_SIZE 40
 #define LENGTH_CHARACTERS 8
@@ -125,8 +126,6 @@ typedef struct {
 static gboolean scroll_to_song(gpointer data) {
 	Reveal *reveal = data;
 	gtk_list_view_scroll_to(GTK_LIST_VIEW(reveal->list), reveal->position, GTK_LIST_SCROLL_FOCUS, NULL);
-	g_object_unref(reveal->list);
-	g_free(reveal);
 	return G_SOURCE_REMOVE;
 }
 
@@ -144,10 +143,11 @@ void reveal_song_in_list(GtkWidget *list, const char *video_id) {
 		for (guint index = 0; bound_rows && index < bound_rows->len; index++)
 			show_playing(g_ptr_array_index(bound_rows, index));
 		Reveal *reveal = g_new0(Reveal, 1);
-		reveal->list = g_object_ref(list);
+		reveal->list = list;
 		reveal->position = position;
-		/* The page may only now be sliding in, so the list scrolls once it has its size */
-		run_after_frame(list, scroll_to_song, reveal);
+		/* The page may only now be sliding in, so the list scrolls once it has its size, while a list closed first
+		 * never runs it */
+		run_after_frame(list, scroll_to_song, reveal, g_free);
 		return;
 	}
 }
@@ -282,7 +282,7 @@ static GdkContentProvider *start_drag(GtkDragSource *source, double x, double y,
 	CrimsonSong *song = gtk_list_item_get_item(row->item);
 	if (!song)
 		return NULL;
-	gtk_drag_source_set_icon(source, gtk_widget_paintable_new(row->box), (int)x, (int)y);
+	show_dragged_widget(source, row->box, x, y);
 	if (is_extra_song(song))
 		return gdk_content_provider_new_typed(CRIMSON_TYPE_SONG, song);
 	GdkContentProvider *contents[] = {

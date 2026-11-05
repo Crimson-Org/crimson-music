@@ -1,5 +1,5 @@
 #include "lang/en.h"
-#include "common/log.h"
+#include "common/app/log.h"
 #include "pages/info-dialog.h"
 #include "app/last-song.h"
 #include "sources/local-library.h"
@@ -176,6 +176,8 @@ void restore_last_song(Window *window) {
 /* Shuffling from a page turns shuffle on, while a plain click keeps the listener's choice */
 void play_songs(GListModel *songs, guint start, gboolean is_shuffled, gpointer data) {
 	Window *window = data;
+	/* Playing anything ends the wait for a playlist that was asked to play once loaded */
+	g_clear_pointer(&window->waiting_play_id, g_free);
 	if (is_shuffled)
 		g_action_change_state(G_ACTION(window->shuffle_action), g_variant_new_boolean(TRUE));
 	AdwNavigationPage *page = adw_navigation_view_get_visible_page(ADW_NAVIGATION_VIEW(window->navigation));

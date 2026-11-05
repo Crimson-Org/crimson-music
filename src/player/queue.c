@@ -10,40 +10,58 @@ Queue *create_queue(void) {
 }
 
 
-/* Puts the playing song first when shuffling and keeps it current either way, so switching never skips */
-static void order_queue(Queue *queue, guint current) {
-	g_array_set_size(queue->order, 0);
-	g_array_set_size(queue->queued, 0);
-	if (!queue->is_shuffled) {
-		for (guint index = 0; index < queue->songs->len; index++)
-			g_array_append_val(queue->order, index);
-		queue->position = current;
-		g_array_set_size(queue->queued, queue->order->len);
-		return;
-	}
-	g_array_append_val(queue->order, current);
+/* The songs still in the queue, each once in the playlist's order, so a song taken out stays out */
+static GArray *list_present(Queue *queue) {
+	GArray *present = g_array_new(FALSE, FALSE, sizeof(guint));
+	g_autofree gboolean *is_present = g_new0(gboolean, queue->songs->len);
+	for (guint place = 0; place < queue->order->len; place++)
+		is_present[g_array_index(queue->order, guint, place)] = TRUE;
 	for (guint index = 0; index < queue->songs->len; index++)
-		if (index != current)
-			g_array_append_val(queue->order, index);
-	for (guint index = queue->order->len - 1; index > 1; index--) {
+		if (is_present[index])
+			g_array_append_val(present, index);
+	return present;
+}
+
+
+/* Puts the playing song first when shuffling and keeps it current either way, so switching never skips */
+static void order_queue(Queue *queue, guint current, GArray *present) {
+	g_array_set_size(queue->order, 0);
+	queue->position = 0;
+	if (queue->is_shuffled)
+		g_array_append_val(queue->order, current);
+	for (guint place = 0; place < present->len; place++) {
+		guint index = g_array_index(present, guint, place);
+		if (index == current && queue->is_shuffled)
+			continue;
+		if (index == current)
+			queue->position = queue->order->len;
+		g_array_append_val(queue->order, index);
+	}
+	for (guint index = queue->is_shuffled ? queue->order->len - 1 : 0; index > 1; index--) {
 		guint other = (guint)g_random_int_range(1, (gint32)index + 1);
 		guint swapped = g_array_index(queue->order, guint, index);
 		g_array_index(queue->order, guint, index) = g_array_index(queue->order, guint, other);
 		g_array_index(queue->order, guint, other) = swapped;
 	}
-	queue->position = 0;
+	g_array_set_size(queue->queued, 0);
 	g_array_set_size(queue->queued, queue->order->len);
 }
 
 
+/* A new list replaces the whole queue, and an empty one leaves nothing of the old order behind */
 void fill_queue(Queue *queue, GListModel *songs, guint start, gboolean is_shuffled) {
 	g_ptr_array_set_size(queue->songs, 0);
-	for (guint index = 0; index < g_list_model_get_n_items(songs); index++)
+	g_autoptr(GArray) present = g_array_new(FALSE, FALSE, sizeof(guint));
+	for (guint index = 0; index < g_list_model_get_n_items(songs); index++) {
 		g_ptr_array_add(queue->songs, g_list_model_get_item(songs, index));
+		g_array_append_val(present, index);
+	}
 	queue->is_shuffled = is_shuffled;
+	g_array_set_size(queue->order, 0);
+	g_array_set_size(queue->queued, 0);
+	queue->position = 0;
 	if (queue->songs->len)
-		order_queue(queue, MIN(start, queue->songs->len - 1));
-	g_array_set_size(queue->queued, queue->order->len);
+		order_queue(queue, MIN(start, queue->songs->len - 1), present);
 }
 
 
@@ -71,8 +89,8 @@ void shuffle_queue(Queue *queue, gboolean is_shuffled) {
 		if (g_array_index(queue->queued, gboolean, place))
 			g_array_append_val(waiting, g_array_index(queue->order, guint, place));
 	}
-	order_queue(queue, g_array_index(queue->order, guint, queue->position));
-	g_array_set_size(queue->queued, queue->order->len);
+	g_autoptr(GArray) present = list_present(queue);
+	order_queue(queue, g_array_index(queue->order, guint, queue->position), present);
 	for (guint index = 0; index < waiting->len; index++) {
 		guint song = g_array_index(waiting, guint, index);
 		for (guint place = 0; place < queue->order->len; place++) {

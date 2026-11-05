@@ -4,7 +4,9 @@
 #include "dynamic/dynamic-editor.h"
 #include "sources/song-info.h"
 #include "window/window-private.h"
-#include "common/spacing.h"
+#include "common/widgets/spacing.h"
+#include "common/text/numbers.h"
+#include "visuals/motion.h"
 
 #define SIDEBAR_ARTWORK_SIZE 32
 /* Gathered songs arrive one after another, so the playlists are filtered again a moment after the last one */
@@ -62,9 +64,7 @@ static void show_collage(const char *path, gpointer data) {
 	gboolean is_latest = playlist && g_strcmp0(g_object_get_data(G_OBJECT(playlist), "covers"), wait->covers) == 0;
 	if (path && is_latest) {
 		g_set_str(&playlist->artwork, path);
-		GtkWidget *cover = g_object_get_data(G_OBJECT(playlist), "sidebar-cover");
-		if (cover)
-			show_artwork(cover, path);
+		show_sidebar_cover(playlist, path);
 		if (playlist == wait->window->shown)
 			set_song_page_heading(wait->window->playlist_page, playlist->title, playlist->subtitle,
 				playlist->artwork, FALSE);
@@ -101,8 +101,9 @@ static void make_playlist_collage(Window *window, CrimsonPlaylist *playlist) {
 static void describe_playlist(Window *window, CrimsonPlaylist *playlist) {
 	guint count = g_list_model_get_n_items(G_LIST_MODEL(playlist->songs));
 	g_free(playlist->subtitle);
+	g_autofree char *shown = format_count(count);
 	playlist->subtitle = g_strdup_printf(g_dngettext(NULL, TEXT_DYNAMIC_SUBTITLE_ONE, TEXT_DYNAMIC_SUBTITLE, count),
-		count);
+		shown);
 	make_playlist_collage(window, playlist);
 }
 
@@ -110,8 +111,6 @@ static void describe_playlist(Window *window, CrimsonPlaylist *playlist) {
 /* Each dynamic playlist holds the liked songs that pass its filters right now, in the order of Liked Music */
 static void refilter(Window *window) {
 	GListModel *pool = get_pool(window);
-	if (!pool)
-		return;
 	for (guint index = 0; index < window->dynamic_rules->len; index++) {
 		DynamicRules *rules = g_ptr_array_index(window->dynamic_rules, index);
 		CrimsonPlaylist *playlist = find_dynamic_playlist(window, rules->id);
@@ -159,7 +158,7 @@ static void press_dynamic_row(GtkGestureClick *gesture, int presses, double x, d
 /* Dynamic playlists drag by their id, which only another dynamic playlist takes, as the place to move to */
 static GdkContentProvider *start_dynamic_drag(GtkDragSource *source, double x, double y, Window *window) {
 	GtkWidget *box = gtk_event_controller_get_widget(GTK_EVENT_CONTROLLER(source));
-	gtk_drag_source_set_icon(source, gtk_widget_paintable_new(box), (int)x, (int)y);
+	show_dragged_widget(source, box, x, y);
 	return gdk_content_provider_new_typed(G_TYPE_STRING, g_object_get_data(G_OBJECT(box), "playlist-id"));
 }
 
@@ -197,7 +196,7 @@ static GtkWidget *create_row(Window *window, CrimsonPlaylist *playlist) {
 	GtkWidget *box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, SPACING_NORMAL);
 	GtkWidget *cover = create_cover(SIDEBAR_ARTWORK_SIZE);
 	show_artwork(cover, playlist->artwork);
-	g_object_set_data(G_OBJECT(playlist), "sidebar-cover", cover);
+	remember_sidebar_cover(playlist, cover);
 	gtk_box_append(GTK_BOX(box), add_cover_badge(cover, "crimson-dynamic-symbolic"));
 	GtkWidget *label = gtk_label_new(playlist->title);
 	gtk_label_set_xalign(GTK_LABEL(label), 0);

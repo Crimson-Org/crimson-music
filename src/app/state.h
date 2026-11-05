@@ -1,6 +1,6 @@
 #pragma once
 
-#include "common/window-geometry.h"
+#include "common/window/window-geometry.h"
 
 #define DEFAULT_VOLUME 80
 #define MAXIMUM_VOLUME 100

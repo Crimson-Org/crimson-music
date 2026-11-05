@@ -1,9 +1,10 @@
 #include <adwaita.h>
 
 #include "lang/en.h"
-#include "common/smooth-scroll.h"
+#include "common/widgets/smooth-scroll.h"
 #include "pages/comments-page.h"
-#include "common/spacing.h"
+#include "common/widgets/spacing.h"
+#include "common/widgets/loading.h"
 
 #define PAGE_KEY "comments-parts"
 #define THREAD_KEY "comment-thread"
@@ -70,7 +71,8 @@ static GtkWidget *create_thread(CommentsParts *parts, const Comment *comment) {
 	CommentThread *thread = g_new0(CommentThread, 1);
 	*thread = (CommentThread){parts, gtk_box_new(GTK_ORIENTATION_VERTICAL, 0), NULL, g_strdup(comment->replies_token),
 		++parts->next_id};
-	g_autofree char *label = g_strdup_printf(TEXT_COMMENT_REPLIES, comment->replies);
+	g_autofree char *label = g_str_equal(comment->replies, "1") ? g_strdup(TEXT_COMMENT_ONE_REPLY)
+		: g_strdup_printf(TEXT_COMMENT_REPLIES, comment->replies);
 	thread->more = gtk_button_new_with_label(label);
 	gtk_widget_add_css_class(thread->more, "flat");
 	gtk_widget_add_css_class(thread->more, "reply-button");
@@ -158,7 +160,7 @@ GtkWidget *create_comments_page(CommentsWanted wanted, RepliesWanted replies_wan
 	gtk_widget_add_css_class(empty, "compact");
 	parts->stack = gtk_stack_new();
 	gtk_stack_set_transition_type(GTK_STACK(parts->stack), GTK_STACK_TRANSITION_TYPE_CROSSFADE);
-	gtk_stack_add_named(GTK_STACK(parts->stack), adw_spinner_new(), "loading");
+	gtk_stack_add_named(GTK_STACK(parts->stack), create_loading_spinner(), "loading");
 	gtk_stack_add_named(GTK_STACK(parts->stack), parts->scroller, "comments");
 	gtk_stack_add_named(GTK_STACK(parts->stack), empty, "empty");
 	gtk_widget_set_vexpand(parts->stack, TRUE);

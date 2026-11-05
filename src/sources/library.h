@@ -88,6 +88,9 @@ GPtrArray *read_playlists(JSCValue *array);
 GPtrArray *read_songs(JSCValue *array);
 GPtrArray *read_cards(JSCValue *array);
 Home *read_home(JSCValue *message);
+/* A song with every field of the other, and a song for a card that plays one, with what the card shows of it */
+CrimsonSong *copy_song(CrimsonSong *song);
+CrimsonSong *create_card_song(const Card *card);
 /* A song as bytes to store, and back */
 GBytes *save_song_bytes(CrimsonSong *song);
 CrimsonSong *load_song_bytes(GBytes *bytes);

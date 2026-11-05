@@ -1,9 +1,9 @@
 #include <sqlite3.h>
 
 #include "lang/en.h"
-#include "common/identity.h"
+#include "common/app/identity.h"
 #include "sources/discover.h"
-#include "common/key-store.h"
+#include "common/storage/key-store.h"
 
 #define DATABASE_FILE "discover.db"
 /* A song is stored once however many mixes hold it, and each mix keeps the order of its songs */

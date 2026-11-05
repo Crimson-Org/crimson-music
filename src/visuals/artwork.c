@@ -3,8 +3,8 @@
 
 #include "visuals/ambience.h"
 #include "visuals/artwork.h"
-#include "common/identity.h"
-#include "common/key-store.h"
+#include "common/app/identity.h"
+#include "common/storage/key-store.h"
 
 #define CORNER_RADIUS 6
 /* The clear pixels around a tilted cover's picture, which its edges blend into */
@@ -18,6 +18,8 @@
 #define SPIN_START_SCALE 0.3f
 
 #define ARTWORK_FOLDER "artwork"
+/* Covers kept on disk that nothing showed for this long are removed */
+#define KEPT_ARTWORK_DAYS 60
 #define ADDRESS_KEY "artwork-address"
 /* A cover waiting for its picture breathes like the waiting shapes of a page, then its picture fades in over it */
 #define WAITING_CLASS "bone"
@@ -424,6 +426,8 @@ static void load_in_thread(GTask *task, gpointer source, gpointer data, GCancell
 	} else {
 		g_autoptr(GFile) file = g_file_new_for_path(work->path);
 		work->bytes = g_file_load_bytes(file, NULL, NULL, NULL);
+		if (work->bytes)
+			mark_file_used(work->path);
 	}
 	GdkTexture *texture = work->bytes ? gdk_texture_new_from_bytes(work->bytes, NULL) : NULL;
 	g_task_return_pointer(task, texture, texture ? g_object_unref : NULL);
@@ -482,13 +486,23 @@ static void download_artwork(ArtworkRequest *request) {
 
 static char *get_artwork_path(const char *address) {
 	g_autofree char *name = g_compute_checksum_for_string(G_CHECKSUM_SHA1, address, -1);
-	return g_build_filename(g_get_user_cache_dir(), get_application_identity()->slug, ARTWORK_FOLDER, name, NULL);
+	g_autofree char *folder = get_cache_file_path(ARTWORK_FOLDER);
+	return g_build_filename(folder, name, NULL);
 }
 
 
+static void remove_old_artwork(GTask *task, gpointer source, gpointer data, GCancellable *cancellable) {
+	g_autofree char *folder = get_cache_file_path(ARTWORK_FOLDER);
+	remove_old_files(folder, KEPT_ARTWORK_DAYS);
+}
+
+
+/* Covers nobody looked at for a long while go once a start, on a worker, since nothing else would remove them */
 static void prepare_artwork(void) {
 	if (session)
 		return;
+	g_autoptr(GTask) trimming = g_task_new(NULL, NULL, NULL, NULL);
+	g_task_run_in_thread(trimming, remove_old_artwork);
 	session = soup_session_new();
 	textures = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_object_unref);
 	texture_order = g_queue_new();

@@ -1,9 +1,9 @@
 #include <adwaita.h>
 
 #include "lang/en.h"
-#include "common/smooth-scroll.h"
+#include "common/widgets/smooth-scroll.h"
 #include "pages/lyrics-page.h"
-#include "common/spacing.h"
+#include "common/widgets/spacing.h"
 #include "sources/library.h"
 
 #define LYRICS_WIDTH 640

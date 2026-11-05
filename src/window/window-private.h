@@ -9,7 +9,7 @@
 #include "pages/song-page.h"
 #include "app/state.h"
 #include "player/mpris.h"
-#include "common/tray.h"
+#include "common/tray/tray.h"
 #include "window/window.h"
 
 /* Presses a click gesture reports for a double click */
@@ -161,7 +161,9 @@ void unpin_card(Window *window, const char *id);
 extern const SongPageEvents SONG_PAGE_EVENTS;
 void add_page_actions(Window *window);
 GtkWidget *create_navigation(Window *window);
-void add_side_buttons(Window *window);
+/* A sidebar row's cover, which a playlist reaches while the row is there, to show its new artwork */
+void remember_sidebar_cover(CrimsonPlaylist *playlist, GtkWidget *cover);
+void show_sidebar_cover(CrimsonPlaylist *playlist, const char *artwork);
 /* Reads which songs are liked from Liked Music and shows it on every heart */
 void update_liked(Window *window);
 void toggle_playing_like(gpointer data);

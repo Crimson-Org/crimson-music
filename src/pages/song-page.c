@@ -4,11 +4,11 @@
 #include "lang/en.h"
 #include "visuals/ambience.h"
 #include "visuals/artwork.h"
-#include "common/loading.h"
-#include "common/smooth-scroll.h"
+#include "common/widgets/loading.h"
+#include "common/widgets/smooth-scroll.h"
 #include "visuals/motion.h"
 #include "pages/song-page.h"
-#include "common/spacing.h"
+#include "common/widgets/spacing.h"
 
 #define SKELETON_WAVES 6
 #define STAGGER_STEPS 10
@@ -128,7 +128,7 @@ static GdkContentProvider *start_heading_drag(GtkDragSource *source, double x, d
 	if (!page->pin)
 		return NULL;
 	GtkWidget *widget = gtk_event_controller_get_widget(GTK_EVENT_CONTROLLER(source));
-	gtk_drag_source_set_icon(source, gtk_widget_paintable_new(widget), (int)x, (int)y);
+	show_dragged_widget(source, widget, x, y);
 	return gdk_content_provider_new_typed(CRIMSON_TYPE_CARD, page->pin);
 }
 
@@ -702,7 +702,7 @@ static void click_card(GtkGestureClick *gesture, int presses, double x, double y
 
 
 static GdkContentProvider *start_card_drag(GtkDragSource *source, double x, double y, GtkWidget *button) {
-	gtk_drag_source_set_icon(source, gtk_widget_paintable_new(button), (int)x, (int)y);
+	show_dragged_widget(source, button, x, y);
 	return gdk_content_provider_new_typed(CRIMSON_TYPE_CARD, g_object_get_data(G_OBJECT(button), "card"));
 }
 

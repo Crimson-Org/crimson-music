@@ -1,6 +1,7 @@
-// Saving this file writes each task as a .sh script for Linux and macOS and a .cmd script for
+// crimson-build writes each task as a .sh script for Linux and macOS and a .cmd script for
 // Windows in this folder, and those scripts run anywhere without Crimson Build.
 {
+	"systems": ["unix"],
 	"env": {
 		"PROGRAM": "crimson-music",
 		"APPLICATION_ID": "io.github.CrimsonOrg.CrimsonMusic",
@@ -9,26 +10,28 @@
 		"STD": "c11",
 		"WARN": "-Wall -Wextra -Wpedantic -Werror -Wno-unused-parameter",
 		"OPT": "-O2 -g",
-		"PKGS": "gtk4 libadwaita-1 webkitgtk-6.0 libsoup-3.0 sqlite3 gstreamer-1.0 gstreamer-pbutils-1.0",
+		"GTK_MINOR": "16",
+		"ADWAITA_MINOR": "8",
+		"PKGS": "gtk4 >= 4.${GTK_MINOR} libadwaita-1 >= 1.${ADWAITA_MINOR} webkitgtk-6.0 libsoup-3.0 sqlite3 gstreamer-1.0 gstreamer-pbutils-1.0",
 		"LIBS": "-lm",
 		"DEFINES": "-DAPPLICATION_VERSION=\"${VERSION}\"",
-		"INCLUDES": "-Isrc -Ibuild -Isubprojects/crimson-core/src"
+		"VERSION_CHECKS": "-DGDK_VERSION_MIN_REQUIRED=GDK_VERSION_4_${GTK_MINOR} -DGDK_VERSION_MAX_ALLOWED=GDK_VERSION_4_${GTK_MINOR} -DADW_VERSION_MIN_REQUIRED=ADW_VERSION_1_${ADWAITA_MINOR} -DADW_VERSION_MAX_ALLOWED=ADW_VERSION_1_${ADWAITA_MINOR}",
+		"INCLUDES": "-Isrc -Ibuild -Isubprojects/crimson-core/src",
+		"HEADERS": "src/*/*.h build/lastfm-keys.h subprojects/crimson-core/src/*/*.h subprojects/crimson-core/src/*/*/*.h"
 	},
 	"tasks": {
 		"build": {
 			"description": "Build Crimson Music into the project folder",
 			"steps": [
 				{"needs": ["cc", "make", "pkg-config", "glib-compile-resources"]},
-				{"pkg": ["gtk4 >= 4.14", "libadwaita-1 >= 1.8", "webkitgtk-6.0", "libsoup-3.0", "sqlite3"]},
+				{"pkg": "${PKGS}"},
 				{"mkdir": ["build/obj"]},
 				"sh scripts/lastfm-keys.sh",
 				"glib-compile-resources --sourcedir assets --target build/resources.c --generate-source assets/crimson-music.gresource.xml",
-				{"each": {"from": "src/*.c src/app/*.c src/dynamic/*.c src/pages/*.c src/player/*.c src/sources/*.c src/visuals/*.c src/window/*.c", "to": "build/obj/{id}.o", "run": "cc -std=${STD} $WARN $OPT $DEFINES $INCLUDES $(pkg-config --cflags $PKGS | sed \"s/-I/-isystem /g\") -c {from} -o {to}", "also": ["src/*/*.h", "build/lastfm-keys.h", "subprojects/crimson-core/src/common/*.h"]}},
-				{"each": {"from": "subprojects/crimson-core/src/common/*.c", "to": "build/obj/{id}.o", "run": "cc -std=${STD} $WARN $OPT $DEFINES $INCLUDES $(pkg-config --cflags $PKGS | sed \"s/-I/-isystem /g\") -c {from} -o {to}", "also": ["src/*/*.h", "subprojects/crimson-core/src/common/*.h"]}},
-				"cc -std=gnu11 -O2 -g $(pkg-config --cflags gio-2.0) -c build/resources.c -o build/obj/resources.o",
 				"glib-compile-resources --sourcedir subprojects/crimson-core/assets --target build/core-resources.c --generate-source subprojects/crimson-core/assets/crimson-core.gresource.xml",
-				"cc -std=gnu11 -O2 -g $(pkg-config --cflags gio-2.0) -c build/core-resources.c -o build/obj/core-resources.o",
-				"cc -o build/${PROGRAM} build/obj/*.o $(pkg-config --libs $PKGS) $LIBS",
+				{"each": {"from": "src/*.c src/app/*.c src/dynamic/*.c src/pages/*.c src/player/*.c src/sources/*.c src/visuals/*.c src/window/*.c subprojects/crimson-core/src/common/*/*.c", "to": "build/obj/{id}.o", "run": "cc -std=${STD} $WARN $OPT $DEFINES $VERSION_CHECKS $INCLUDES $(pkg-config --cflags \"$PKGS\" | sed \"s/-I/-isystem /g\") -c {from} -o {to}", "also": "${HEADERS}"}},
+				{"each": {"from": "build/resources.c build/core-resources.c", "to": "build/obj/{id}.o", "run": "cc -std=gnu11 $OPT $(pkg-config --cflags gio-2.0) -c {from} -o {to}"}},
+				"cc -o build/${PROGRAM} build/obj/*.o $(pkg-config --libs \"$PKGS\") $LIBS",
 				{"copy": {"from": "build/${PROGRAM}", "to": ".${PROGRAM}.new"}},
 				{"move": {"from": ".${PROGRAM}.new", "to": "${PROGRAM}"}},
 				{"mkdir": ["logs"]}
@@ -45,23 +48,13 @@
 			"description": "Install Crimson Music for the current user",
 			"depends": "build",
 			"steps": [
-				"install -Dm755 build/${PROGRAM} ${PREFIX}/bin/${PROGRAM}",
-				"mkdir -p ${PREFIX}/share/applications && for desktop in assets/${APPLICATION_ID}*.desktop.in; do sed \"s|@EXEC@|${PREFIX}/bin/${PROGRAM}|\" \"$desktop\" > \"${PREFIX}/share/applications/$(basename \"$desktop\" .in)\"; done",
-				"install -Dm644 assets/icons/scalable/apps/${APPLICATION_ID}.svg ${PREFIX}/share/icons/hicolor/scalable/apps/${APPLICATION_ID}.svg",
-				"install -Dm644 assets/icons/symbolic/apps/${APPLICATION_ID}-symbolic.svg ${PREFIX}/share/icons/hicolor/symbolic/apps/${APPLICATION_ID}-symbolic.svg",
-				"install -Dm644 assets/${APPLICATION_ID}.metainfo.xml ${PREFIX}/share/metainfo/${APPLICATION_ID}.metainfo.xml",
-				"update-desktop-database ${PREFIX}/share/applications >/dev/null 2>&1 || true",
-				"gtk-update-icon-cache --quiet --ignore-theme-index ${PREFIX}/share/icons/hicolor >/dev/null 2>&1 || true"
+				"sh subprojects/crimson-core/scripts/install.sh"
 			]
 		},
 		"uninstall": {
 			"description": "Remove Crimson Music from the current user",
 			"steps": [
-				{"remove": "${PREFIX}/bin/${PROGRAM}"},
-				{"remove": "${PREFIX}/share/applications/${APPLICATION_ID}.desktop"},
-				{"remove": "${PREFIX}/share/icons/hicolor/scalable/apps/${APPLICATION_ID}.svg"},
-				{"remove": "${PREFIX}/share/icons/hicolor/symbolic/apps/${APPLICATION_ID}-symbolic.svg"},
-				{"remove": "${PREFIX}/share/metainfo/${APPLICATION_ID}.metainfo.xml"}
+				"sh subprojects/crimson-core/scripts/uninstall.sh"
 			]
 		},
 		"archive": {

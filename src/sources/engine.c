@@ -1,9 +1,9 @@
 #include <string.h>
 
-#include "common/identity.h"
-#include "common/log.h"
+#include "common/app/identity.h"
+#include "common/app/log.h"
 #include "sources/engine.h"
-#include "common/key-store.h"
+#include "common/storage/key-store.h"
 
 #define START_ADDRESS "https://music.youtube.com/library"
 #define ALLOWED_PAGES "https://music.youtube.com/*"
@@ -24,6 +24,12 @@
 /* A page drawn without the GPU shows video frames as plain green when WebKit hands video to the GPU */
 #define CPU_RENDERING_VARIABLE "WEBKIT_SKIA_ENABLE_CPU_RENDERING"
 #define GL_VIDEO_OFF_VARIABLE "WEBKIT_GST_DISABLE_GL_SINK"
+/* A page that could not load, such as while offline, is tried again after this wait, doubling up to the longest */
+#define FIRST_RETRY_SECONDS 2
+#define LONGEST_RETRY_SECONDS 120
+/* Calls made while the page is not ready wait at most this many, dropping the oldest, so a page that never loads
+ * cannot fill the memory */
+#define MOST_WAITING_CALLS 100
 
 struct Engine {
 	const EngineEvents *events;
@@ -37,6 +43,7 @@ struct Engine {
 	EngineVideoDrawn video_drawn;
 	/* Calls made before the page was ready, run in order once it is */
 	GPtrArray *waiting_calls;
+	guint retry_source, retry_seconds;
 };
 
 static const char *const ANSWER_TYPES[] = {"search", "artist", "album", "album-found", "liked", "disliked", "created", "edited",
@@ -79,6 +86,8 @@ static void call_page(Engine *engine, const char *body, GVariant *arguments) {
 	call->body = g_strdup(body);
 	call->arguments = arguments ? g_variant_ref_sink(arguments) : NULL;
 	if (!engine->is_ready) {
+		if (engine->waiting_calls->len >= MOST_WAITING_CALLS)
+			g_ptr_array_remove_index(engine->waiting_calls, 0);
 		g_ptr_array_add(engine->waiting_calls, call);
 		return;
 	}
@@ -122,6 +131,7 @@ static void become_ready(Engine *engine, gboolean is_signed_in) {
 	note_startup_moment("YouTube Music page ready");
 	engine->is_ready = TRUE;
 	engine->is_signing_out = FALSE;
+	engine->retry_seconds = 0;
 	for (guint index = 0; index < engine->waiting_calls->len; index++)
 		run_page_call(engine, g_ptr_array_index(engine->waiting_calls, index));
 	g_ptr_array_set_size(engine->waiting_calls, 0);
@@ -167,6 +177,37 @@ static void notice_page(WebKitWebView *view, WebKitLoadEvent event, Engine *engi
 	const char *address = webkit_web_view_get_uri(view);
 	if (event == WEBKIT_LOAD_FINISHED && !engine->is_ready && !g_str_has_prefix(address, MUSIC_ADDRESS))
 		become_ready(engine, FALSE);
+}
+
+
+static gboolean retry_loading(gpointer data) {
+	Engine *engine = data;
+	engine->retry_source = 0;
+	webkit_web_view_load_uri(engine->view, START_ADDRESS);
+	return G_SOURCE_REMOVE;
+}
+
+
+/* A page that could not load before it got ready is tried again later, waiting longer each time */
+static gboolean notice_load_failure(WebKitWebView *view, WebKitLoadEvent event, char *address, GError *error,
+	Engine *engine) {
+	if (engine->is_ready || engine->retry_source || g_error_matches(error, WEBKIT_NETWORK_ERROR,
+		WEBKIT_NETWORK_ERROR_CANCELLED))
+		return FALSE;
+	engine->retry_seconds = engine->retry_seconds ? MIN(engine->retry_seconds * 2, LONGEST_RETRY_SECONDS)
+		: FIRST_RETRY_SECONDS;
+	g_warning("YouTube Music did not load, so it is tried again in %u seconds: %s", engine->retry_seconds,
+		error->message);
+	engine->retry_source = g_timeout_add_seconds(engine->retry_seconds, retry_loading, engine);
+	return TRUE;
+}
+
+
+/* A page whose web process stopped loads again, and calls wait until it is ready */
+static void restart_page(WebKitWebView *view, WebKitWebProcessTerminationReason reason, Engine *engine) {
+	g_warning("The YouTube Music page stopped, so it loads again");
+	engine->is_ready = FALSE;
+	webkit_web_view_load_uri(engine->view, START_ADDRESS);
 }
 
 
@@ -236,6 +277,8 @@ Engine *create_engine(const EngineEvents *events, gpointer data) {
 	gtk_widget_set_can_focus(GTK_WIDGET(engine->view), FALSE);
 	g_signal_connect(engine->view, "permission-request", G_CALLBACK(refuse_permission), NULL);
 	g_signal_connect(engine->view, "load-changed", G_CALLBACK(notice_page), engine);
+	g_signal_connect(engine->view, "load-failed", G_CALLBACK(notice_load_failure), engine);
+	g_signal_connect(engine->view, "web-process-terminated", G_CALLBACK(restart_page), engine);
 	return engine;
 }
 

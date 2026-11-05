@@ -4,7 +4,7 @@
 #include "pages/lyrics-page.h"
 #include "visuals/artwork.h"
 #include "pages/comments-page.h"
-#include "common/startup.h"
+#include "common/app/startup.h"
 #include "visuals/collage.h"
 #include "sources/discover.h"
 #include "dynamic/dynamic.h"
@@ -16,6 +16,7 @@
 #include "sources/song-info.h"
 #include "pages/song-list.h"
 #include "window/window-private.h"
+#include "common/text/numbers.h"
 
 #define THOUSAND 1e3
 #define MILLION 1e6
@@ -44,9 +45,6 @@
 /* The account picture is asked for at this size, sharp enough for the Home banner */
 #define ACCOUNT_PHOTO_SIZE "=s512"
 #define LIBRARY_RESULT_LIMIT 30
-/* The mouse's side buttons as GTK numbers them */
-#define BACK_BUTTON 8
-#define FORWARD_BUTTON 9
 /* Liked Music and Episodes for Later belong to YouTube Music itself and can be neither renamed nor deleted */
 /* How many of an artist page's songs are songs rather than videos, so more songs go before the videos */
 #define SONG_COUNT_KEY "song-count"
@@ -67,7 +65,6 @@ static SongPage *find_song_page(Window *window, const char *tag) {
 /* The search page slides in at once with a spinner, since results follow every keystroke */
 static gboolean unroll_search(gpointer data) {
 	gtk_revealer_set_reveal_child(GTK_REVEALER(data), TRUE);
-	g_object_unref(data);
 	return G_SOURCE_REMOVE;
 }
 
@@ -87,7 +84,7 @@ static SongPage *push_song_page(Window *window, const char *tag, const char *tit
 		gtk_widget_set_vexpand(widget, TRUE);
 		gtk_revealer_set_child(GTK_REVEALER(revealer), widget);
 		g_object_set_data(G_OBJECT(revealer), "song-page", page);
-		run_after_frame(revealer, unroll_search, g_object_ref(revealer));
+		run_after_frame(revealer, unroll_search, revealer, NULL);
 		widget = revealer;
 	}
 	AdwNavigationPage *navigation_page = adw_navigation_page_new_with_tag(widget, title, tag);
@@ -234,6 +231,10 @@ void open_card(const char *id, gpointer data) {
 		open_discover_mix(window, id);
 		return;
 	}
+	/* A similar page is made from the song or artist it was opened from, so its tag alone cannot open it again, and
+	 * it is never mistaken for an album */
+	if (g_str_has_prefix(id, SIMILAR_SONGS_TAG) || g_str_has_prefix(id, SIMILAR_ARTISTS_TAG))
+		return;
 	/* The page slides in at once with placeholders, and its heading, cards and songs follow when they arrive */
 	show_waiting(window, id);
 	gboolean is_artist = g_str_has_prefix(id, ARTIST_PREFIX);
@@ -454,7 +455,7 @@ typedef struct {
 
 
 /* Listener and play counts read better rounded, such as 1.2M */
-static char *format_count(const char *digits) {
+static char *format_rounded_count(const char *digits) {
 	double count = g_ascii_strtod(digits ? digits : "", NULL);
 	if (count >= MILLION)
 		return g_strdup_printf("%.1fM", count / MILLION);
@@ -474,11 +475,11 @@ static void show_about(GHashTable *about, gpointer data) {
 		const char *plays = g_hash_table_lookup(about, "plays");
 		const char *tags = g_hash_table_lookup(about, "tags");
 		if (listeners && *listeners && g_strcmp0(listeners, "0") != 0) {
-			g_autofree char *count = format_count(listeners);
+			g_autofree char *count = format_rounded_count(listeners);
 			g_ptr_array_add(facts, g_strdup_printf(TEXT_ABOUT_LISTENERS, count));
 		}
 		if (plays && *plays && g_strcmp0(plays, "0") != 0) {
-			g_autofree char *count = format_count(plays);
+			g_autofree char *count = format_rounded_count(plays);
 			g_ptr_array_add(facts, g_strdup_printf(TEXT_ABOUT_PLAYS, count));
 		}
 		if (tags && *tags)
@@ -589,7 +590,8 @@ static Shelf *create_history_shelf(Home *home) {
 	Card *all = g_new0(Card, 1);
 	all->id = g_strdup(home->history_id);
 	all->title = g_strdup(TEXT_FULL_HISTORY);
-	all->subtitle = g_strdup_printf(songs->len == 1 ? TEXT_SONG_COUNT_ONE : TEXT_SONG_COUNT, songs->len);
+	g_autofree char *shown = format_count(songs->len);
+	all->subtitle = g_strdup_printf(songs->len == 1 ? TEXT_SONG_COUNT_ONE : TEXT_SONG_COUNT, shown);
 	all->artwork = g_strdup(HISTORY_ARTWORK);
 	g_ptr_array_add(shelf->cards, all);
 	/* A song played twice lately shows once, and plays from its newest play */
@@ -807,6 +809,17 @@ static void show_video_disliked(Window *window, const char *video_id, gboolean i
 }
 
 
+/* Shows a heart turned on or off everywhere, without asking YouTube */
+static void show_video_liked(Window *window, const char *video_id, gboolean is_liked) {
+	if (is_liked)
+		g_hash_table_add(window->liked_videos, g_strdup(video_id));
+	else
+		g_hash_table_remove(window->liked_videos, video_id);
+	set_liked_videos(window->liked_videos);
+	show_player_liked(window->bar, is_video_liked(window->current_video));
+}
+
+
 /* Turns the heart at once and asks YouTube, which turns it back with a message if it refuses */
 static void toggle_video_like(Window *window, const char *video_id, CrimsonSong *song) {
 	if (is_local_song(video_id)) {
@@ -816,15 +829,10 @@ static void toggle_video_like(Window *window, const char *video_id, CrimsonSong 
 	if (!require_account(window, TEXT_FEATURE_LIKE))
 		return;
 	gboolean is_liked = !g_hash_table_contains(window->liked_videos, video_id);
-	if (is_liked)
-		g_hash_table_add(window->liked_videos, g_strdup(video_id));
-	else
-		g_hash_table_remove(window->liked_videos, video_id);
 	/* A like takes the place of a dislike on YouTube */
 	if (is_liked && is_video_disliked(video_id))
 		show_video_disliked(window, video_id, FALSE);
-	set_liked_videos(window->liked_videos);
-	show_player_liked(window->bar, is_video_liked(window->current_video));
+	show_video_liked(window, video_id, is_liked);
 	like_song(window->engine, video_id, is_liked);
 }
 
@@ -909,8 +917,9 @@ static void finish_like(Window *window, JSCValue *message) {
 	}
 	g_autofree char *video = read_text(message, "video");
 	g_autoptr(JSCValue) liked = jsc_value_object_get_property(message, "liked");
+	/* Only the heart turns back, since asking YouTube the other way could fail and turn it again for ever */
 	if (jsc_value_to_boolean(liked) == g_hash_table_contains(window->liked_videos, video))
-		toggle_video_like(window, video, NULL);
+		show_video_liked(window, video, !jsc_value_to_boolean(liked));
 	show_message(window, TEXT_LIKE_FAILED);
 }
 
@@ -1334,16 +1343,9 @@ static void find_album_action(GSimpleAction *action, GVariant *parameter, gpoint
 
 /* A copy of the song, which slides open where it joins a list */
 static CrimsonSong *copy_added_song(CrimsonSong *song) {
-	CrimsonSong *copy = g_object_new(CRIMSON_TYPE_SONG, NULL);
-	copy->id = g_strdup(song->id);
-	copy->title = g_strdup(song->title);
-	copy->artist = g_strdup(song->artist);
-	copy->artist_id = g_strdup(song->artist_id);
-	copy->album = g_strdup(song->album);
-	copy->album_id = g_strdup(song->album_id);
-	copy->duration = g_strdup(song->duration);
-	copy->artwork = g_strdup(song->artwork);
-	copy->set_id = g_strdup("");
+	CrimsonSong *copy = copy_song(song);
+	/* The copy is a new entry of its list, which YouTube gives its own entry id */
+	g_set_str(&copy->set_id, "");
 	mark_song_arriving(copy);
 	return copy;
 }
@@ -1752,26 +1754,30 @@ static void finish_new_playlist(GObject *dialog, GAsyncResult *result, gpointer 
 }
 
 
-/* A new local playlist goes first in the sidebar and opens at once */
-static void finish_new_local_playlist(GObject *dialog, GAsyncResult *result, gpointer data) {
-	Window *window = data;
+/* A new local playlist goes first in the sidebar and opens at once, and NULL says the dialog was cancelled */
+static CrimsonPlaylist *add_new_local_playlist(Window *window, GObject *dialog, GAsyncResult *result) {
 	g_autofree char *name = read_answer(dialog, result);
 	if (!name || !*name)
-		return;
-	g_autoptr(CrimsonPlaylist) playlist = create_local_playlist(name);
+		return NULL;
+	CrimsonPlaylist *playlist = create_local_playlist(name);
 	describe_local_playlist(playlist);
 	g_list_store_insert(window->playlists, 0, playlist);
 	save_local_playlists(window->playlists);
 	select_playlist_row(window, playlist->id);
+	return playlist;
+}
+
+
+static void finish_new_local_playlist(GObject *dialog, GAsyncResult *result, gpointer data) {
+	g_autoptr(CrimsonPlaylist) playlist = add_new_local_playlist(data, dialog, result);
 }
 
 
 static void finish_new_local_playlist_with_song(GObject *dialog, GAsyncResult *result, gpointer data) {
 	Window *window = data;
 	g_autoptr(CrimsonSong) song = window->menu_song ? g_object_ref(window->menu_song) : NULL;
-	finish_new_local_playlist(dialog, result, data);
-	g_autoptr(CrimsonPlaylist) playlist = g_list_model_get_item(G_LIST_MODEL(window->playlists), 0);
-	if (song && playlist && is_local_playlist(playlist) && !g_list_model_get_n_items(G_LIST_MODEL(playlist->songs)))
+	g_autoptr(CrimsonPlaylist) playlist = add_new_local_playlist(window, dialog, result);
+	if (song && playlist)
 		add_song_to(window, playlist, song);
 }
 
@@ -2330,26 +2336,6 @@ static void forget_forward(AdwNavigationView *navigation, Window *window) {
 	if (!window->is_going_forward)
 		g_ptr_array_set_size(window->forward_tags, 0);
 	window->is_going_forward = FALSE;
-}
-
-
-/* The mouse's back and forward buttons work anywhere in the window */
-static void press_side_button(GtkGestureClick *gesture, int presses, double x, double y, Window *window) {
-	guint button = gtk_gesture_single_get_current_button(GTK_GESTURE_SINGLE(gesture));
-	if (button != BACK_BUTTON && button != FORWARD_BUTTON)
-		return;
-	gtk_gesture_set_state(GTK_GESTURE(gesture), GTK_EVENT_SEQUENCE_CLAIMED);
-	gtk_widget_activate_action(GTK_WIDGET(window->window), button == BACK_BUTTON ? "win.back" : "win.forward",
-		NULL);
-}
-
-
-void add_side_buttons(Window *window) {
-	GtkGesture *click = gtk_gesture_click_new();
-	gtk_gesture_single_set_button(GTK_GESTURE_SINGLE(click), 0);
-	gtk_event_controller_set_propagation_phase(GTK_EVENT_CONTROLLER(click), GTK_PHASE_CAPTURE);
-	g_signal_connect(click, "pressed", G_CALLBACK(press_side_button), window);
-	gtk_widget_add_controller(GTK_WIDGET(window->window), GTK_EVENT_CONTROLLER(click));
 }
 
 

@@ -1,4 +1,4 @@
-#include "common/key-store.h"
+#include "common/storage/key-store.h"
 #include "app/pins.h"
 
 #define PINS_FILE "pins.ini"

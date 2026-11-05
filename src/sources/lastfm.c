@@ -1,8 +1,8 @@
 #include <glib/gstdio.h>
 #include <libsoup/soup.h>
 
-#include "common/identity.h"
-#include "common/key-store.h"
+#include "common/app/identity.h"
+#include "common/storage/key-store.h"
 #include "lastfm-keys.h"
 #include "sources/lastfm.h"
 #include "sources/song-info.h"
@@ -27,6 +27,7 @@
 #define ERROR_TEMPORARY 16
 #define ERROR_SESSION 9
 #define ERROR_NOT_ALLOWED_YET 14
+#define ERROR_RATE_LIMIT 29
 #define SIMILAR_LIMIT "8"
 /* Each similar song or artist costs a YouTube Music search, so a page asks for a fair number, not all */
 #define SIMILAR_LOOKUP_LIMIT "25"
@@ -114,11 +115,14 @@ static void send_signed(GHashTable *parameters, GAsyncReadyCallback done, gpoint
 }
 
 
-/* The answers are small and fixed, so the few values wanted are picked out by name */
+/* The answers are small and fixed, so the few values wanted are picked out by name, and a server that failed counts
+ * as unreachable, since its answer is no answer at all */
 static char *read_answer(GObject *source, GAsyncResult *result, int *error) {
 	g_autoptr(GBytes) bytes = soup_session_send_and_read_finish(SOUP_SESSION(source), result, NULL);
-	*error = bytes ? 0 : -1;
-	if (!bytes)
+	SoupMessage *message = soup_session_get_async_result_message(SOUP_SESSION(source), result);
+	gboolean has_failed = message && SOUP_STATUS_IS_SERVER_ERROR(soup_message_get_status(message));
+	*error = bytes && !has_failed ? 0 : -1;
+	if (*error)
 		return NULL;
 	char *text = g_strndup(g_bytes_get_data(bytes, NULL), g_bytes_get_size(bytes));
 	g_autoptr(GRegex) code = g_regex_new("\"error\"\\s*:\\s*(\\d+)", 0, 0, NULL);
@@ -456,7 +460,7 @@ static void receive_scrobbles(GObject *source, GAsyncResult *result, gpointer da
 	g_autofree char *text = read_answer(source, result, &error);
 	guint sent = sending_count;
 	sending_count = 0;
-	if (error == -1 || error == ERROR_UNAVAILABLE || error == ERROR_TEMPORARY) {
+	if (error == -1 || error == ERROR_UNAVAILABLE || error == ERROR_TEMPORARY || error == ERROR_RATE_LIMIT) {
 		failures++;
 		guint wait = MIN(RETRY_MS << MIN(failures - 1, RETRY_DOUBLINGS), RETRY_MAXIMUM_MS);
 		retry_source = g_timeout_add(wait, flush_later, NULL);
@@ -501,9 +505,11 @@ static void flush_queue(void) {
 
 
 /* Last.fm knows songs by their main artist, which YouTube Music lists first of several */
+/* The first artist the song links to by name, since an artist's own name may hold a comma, as Tyler, The Creator
+ * does, and a song without links, such as a file, keeps its artist text whole */
 static char *get_first_artist(CrimsonSong *song) {
-	g_auto(GStrv) artists = g_strsplit(song->artist ? song->artist : "", ",", 2);
-	return g_strdup(artists[0] ? g_strstrip(artists[0]) : "");
+	g_auto(GStrv) artists = list_song_artists(song);
+	return g_strdup(artists[0] && artists[1] ? artists[1] : song->artist);
 }
 
 

@@ -1,4 +1,4 @@
-#include "common/key-store.h"
+#include "common/storage/key-store.h"
 #include "app/last-song.h"
 
 #define LAST_SONG_FILE "last-song.ini"
@@ -41,8 +41,8 @@ static CrimsonSong *read_song(GKeyFile *file, const char *group) {
 		return NULL;
 	CrimsonSong *song = g_object_new(CRIMSON_TYPE_SONG, NULL);
 	for (guint index = 0; index < G_N_ELEMENTS(FIELDS); index++) {
-		char *value = g_key_file_get_string(file, group, FIELDS[index].name, NULL);
-		*get_field(song, index) = value ? value : g_strdup("");
+		g_autofree char *value = g_key_file_get_string(file, group, FIELDS[index].name, NULL);
+		g_set_str(get_field(song, index), value ? value : "");
 	}
 	return song;
 }

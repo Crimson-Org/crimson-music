@@ -713,7 +713,7 @@
 				page = readCommentPage(answer)
 			}
 		} catch (error) {
-			send({type: 'error', message: String(error)})
+			send({type: 'warning', message: String(error)})
 		}
 		send({type: 'comments', video, comments: page.comments, next: page.next})
 	}
@@ -725,7 +725,7 @@
 		try {
 			page = readCommentPage(await callYouTube('next', {continuation: token}))
 		} catch (error) {
-			send({type: 'error', message: String(error)})
+			send({type: 'warning', message: String(error)})
 		}
 		send({type: 'replies', video, id, comments: page.comments, next: page.next})
 	}
@@ -776,7 +776,7 @@
 				}
 			}
 		} catch (error) {
-			send({type: 'error', message: String(error)})
+			send({type: 'warning', message: String(error)})
 		}
 		send({type: 'lyrics', video, text, source, lines})
 	}
@@ -904,7 +904,9 @@
 			send({type: 'edited', playlist: id, ok: response.status === 'STATUS_SUCCEEDED', video: added?.videoId,
 				setId: added?.setVideoId})
 		} catch (error) {
-			send({type: 'error', message: String(error), playlist: id})
+			// A failed edit answers like a refused one, so the app lets go of the waiting edits and shows the list as it is
+			send({type: 'warning', message: String(error)})
+			send({type: 'edited', playlist: id, ok: false})
 		}
 	}
 

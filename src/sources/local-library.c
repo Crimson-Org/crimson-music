@@ -3,11 +3,11 @@
 #include <math.h>
 
 #include "lang/en.h"
-#include "common/identity.h"
+#include "common/app/identity.h"
 #include "sources/local-library.h"
 #include "app/settings.h"
 #include "sources/song-info.h"
-#include "common/key-store.h"
+#include "common/storage/key-store.h"
 
 #define INDEX_FILE "local-library.index"
 #define INDEX_FORMAT "a(sxxsssdsu)"
@@ -19,6 +19,7 @@
 #define SAME_LENGTH_SECONDS 2
 /* Changes in a folder usually come in bursts, such as a whole album being copied, so the check waits for quiet */
 #define SETTLE_MILLISECONDS 1500
+#define FOLDER_IDENTITY_ATTRIBUTES G_FILE_ATTRIBUTE_UNIX_DEVICE "," G_FILE_ATTRIBUTE_UNIX_INODE
 #define ENUMERATE_ATTRIBUTES G_FILE_ATTRIBUTE_STANDARD_NAME "," G_FILE_ATTRIBUTE_STANDARD_TYPE "," \
 	G_FILE_ATTRIBUTE_STANDARD_SIZE "," G_FILE_ATTRIBUTE_STANDARD_IS_HIDDEN "," G_FILE_ATTRIBUTE_TIME_MODIFIED
 
@@ -44,6 +45,8 @@ typedef struct {
 	/* The entries from before by path, reused for files whose size and time are the same */
 	GHashTable *known;
 	GPtrArray *entries, *directories;
+	/* The folders walked, by device and inode, so a link back to a parent folder is never walked again */
+	GHashTable *walked;
 	/* Files read again because they changed, whose online lookups no longer fit them */
 	GPtrArray *changed;
 	GstDiscoverer *discoverer;
@@ -95,7 +98,7 @@ char *get_local_song_path(const char *id) {
 
 
 static char *get_cache_file(const char *name) {
-	return g_build_filename(g_get_user_cache_dir(), get_application_identity()->slug, name, NULL);
+	return get_cache_file_path(name);
 }
 
 
@@ -151,17 +154,18 @@ static int compare_entries(gconstpointer first, gconstpointer second) {
 
 static CrimsonSong *create_song(const Entry *entry) {
 	CrimsonSong *song = g_object_new(CRIMSON_TYPE_SONG, NULL);
+	g_free(song->id);
 	song->id = g_filename_to_uri(entry->path, NULL, NULL);
-	song->title = g_strdup(entry->title);
-	song->artist = g_strdup(entry->artist);
-	song->artist_id = g_strdup("");
-	song->album = g_strdup(entry->album);
-	song->album_id = g_strdup("");
-	song->duration = entry->seconds > 0 ? format_song_length(entry->seconds) : g_strdup("");
+	g_set_str(&song->title, entry->title);
+	g_set_str(&song->artist, entry->artist);
+	g_set_str(&song->album, entry->album);
+	if (entry->seconds > 0) {
+		g_free(song->duration);
+		song->duration = format_song_length(entry->seconds);
+	}
 	/* A file without a picture takes the album cover found online for its artist and title, if there is one */
 	const char *found = *entry->cover ? NULL : get_song_info_value(song->id, INFO_COVER);
-	song->artwork = g_strdup(found && *found ? found : entry->cover);
-	song->set_id = g_strdup("");
+	g_set_str(&song->artwork, found && *found ? found : entry->cover);
 	return song;
 }
 
@@ -232,19 +236,50 @@ static char *get_group_key(const Entry *entry) {
 
 /* Versions of the same song show as one, playing the listener's pick or else the best file, with the others kept for
  * the song's menu */
+/* Entries that can be the same song share a key of their names as the locale compares them, so only those are
+ * compared with each other, which keeps a large library fast */
+static char *get_alike_key(const Entry *entry) {
+	g_autofree char *title = g_utf8_collate_key(entry->title, -1);
+	g_autofree char *artist = g_utf8_collate_key(entry->artist, -1);
+	g_autofree char *album = g_utf8_collate_key(entry->album, -1);
+	return g_strjoin("\x1f", title, artist, album, NULL);
+}
+
+
+static GHashTable *gather_alike(void) {
+	GHashTable *alike = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, (GDestroyNotify)g_ptr_array_unref);
+	for (guint index = 0; index < index_entries->len; index++) {
+		Entry *entry = g_ptr_array_index(index_entries, index);
+		char *key = get_alike_key(entry);
+		GPtrArray *entries = g_hash_table_lookup(alike, key);
+		if (!entries) {
+			entries = g_ptr_array_new();
+			g_hash_table_insert(alike, key, entries);
+		} else {
+			g_free(key);
+		}
+		g_ptr_array_add(entries, entry);
+	}
+	return alike;
+}
+
+
 static GPtrArray *merge_versions(void) {
 	g_hash_table_remove_all(versions);
 	GPtrArray *shown = g_ptr_array_new();
-	g_autofree gboolean *is_used = g_new0(gboolean, index_entries->len);
+	g_autoptr(GHashTable) alike = gather_alike();
+	g_autoptr(GHashTable) used = g_hash_table_new(NULL, NULL);
 	for (guint index = 0; index < index_entries->len; index++) {
-		if (is_used[index])
-			continue;
 		Entry *first = g_ptr_array_index(index_entries, index);
+		if (g_hash_table_contains(used, first))
+			continue;
+		g_autofree char *alike_key = get_alike_key(first);
+		GPtrArray *candidates = g_hash_table_lookup(alike, alike_key);
 		GPtrArray *group = g_ptr_array_new();
-		for (guint other = index; other < index_entries->len; other++) {
-			Entry *entry = g_ptr_array_index(index_entries, other);
-			if (!is_used[other] && is_same_song(first, entry)) {
-				is_used[other] = TRUE;
+		for (guint other = 0; other < candidates->len; other++) {
+			Entry *entry = g_ptr_array_index(candidates, other);
+			if (!g_hash_table_contains(used, entry) && is_same_song(first, entry)) {
+				g_hash_table_add(used, entry);
 				g_ptr_array_add(group, entry);
 			}
 		}
@@ -323,17 +358,24 @@ static void show_entries(void) {
 }
 
 
-/* Only a song that has no picture of its own can change when its details arrive, by taking the cover found online */
+/* Only a song that has no picture yet can change when its details arrive, by taking the cover found online, and only
+ * that song changes */
 void update_local_song_info(const char *id) {
-	if (!library || !index_entries)
+	const char *cover = library ? get_song_info_value(id, INFO_COVER) : "";
+	if (!*cover)
 		return;
-	for (guint index = 0; index < index_entries->len; index++) {
-		Entry *entry = g_ptr_array_index(index_entries, index);
-		g_autofree char *uri = g_filename_to_uri(entry->path, NULL, NULL);
-		if (g_strcmp0(uri, id) == 0 && !*entry->cover && *get_song_info_value(id, INFO_COVER)) {
-			show_entries();
+	GListModel *songs = G_LIST_MODEL(library->songs);
+	for (guint position = 0; position < g_list_model_get_n_items(songs); position++) {
+		g_autoptr(CrimsonSong) song = g_list_model_get_item(songs, position);
+		if (!g_str_equal(song->id, id))
+			continue;
+		if (*song->artwork)
 			return;
-		}
+		g_set_str(&song->artwork, cover);
+		g_list_store_splice(library->songs, position, 1, (gpointer *)&song, 1);
+		if (on_changed)
+			on_changed(changed_data);
+		return;
 	}
 }
 
@@ -420,7 +462,22 @@ static void read_entry(Scan *scan, Entry *entry) {
 }
 
 
+/* A folder seen before through another link returns FALSE */
+static gboolean note_walked(Scan *scan, GFile *folder) {
+	g_autoptr(GFileInfo) info = g_file_query_info(folder, FOLDER_IDENTITY_ATTRIBUTES, G_FILE_QUERY_INFO_NONE, NULL,
+		NULL);
+	if (!info)
+		return FALSE;
+	char *identity = g_strdup_printf("%u:%" G_GUINT64_FORMAT,
+		g_file_info_get_attribute_uint32(info, G_FILE_ATTRIBUTE_UNIX_DEVICE),
+		g_file_info_get_attribute_uint64(info, G_FILE_ATTRIBUTE_UNIX_INODE));
+	return g_hash_table_add(scan->walked, identity);
+}
+
+
 static void walk_folder(Scan *scan, GFile *folder) {
+	if (!note_walked(scan, folder))
+		return;
 	g_autoptr(GFileEnumerator) children = g_file_enumerate_children(folder, ENUMERATE_ATTRIBUTES,
 		G_FILE_QUERY_INFO_NONE, NULL, NULL);
 	if (!children)
@@ -463,6 +520,7 @@ static void free_scan(gpointer data) {
 	Scan *scan = data;
 	g_strfreev(scan->folders);
 	g_hash_table_unref(scan->known);
+	g_hash_table_unref(scan->walked);
 	g_ptr_array_unref(scan->entries);
 	g_ptr_array_unref(scan->directories);
 	g_ptr_array_unref(scan->changed);
@@ -561,6 +619,7 @@ static void start_scan(void) {
 	Scan *scan = g_new0(Scan, 1);
 	scan->folders = g_strdupv(get_settings()->media_folders);
 	scan->known = g_hash_table_new_full(g_str_hash, g_str_equal, NULL, free_entry);
+	scan->walked = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
 	for (guint index = 0; index < index_entries->len; index++) {
 		Entry *copy = copy_entry(g_ptr_array_index(index_entries, index));
 		g_hash_table_insert(scan->known, copy->path, copy);

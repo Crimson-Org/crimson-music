@@ -3,12 +3,12 @@
 #include "lang/en.h"
 #include "visuals/artwork.h"
 #include "sources/discover.h"
-#include "common/key-store.h"
-#include "common/loading.h"
-#include "common/log.h"
-#include "common/sidebar-width.h"
-#include "common/smooth-scroll.h"
-#include "common/startup.h"
+#include "common/storage/key-store.h"
+#include "common/widgets/loading.h"
+#include "common/app/log.h"
+#include "common/widgets/sidebar-width.h"
+#include "common/widgets/smooth-scroll.h"
+#include "common/app/startup.h"
 #include "dynamic/dynamic.h"
 #include "app/last-song.h"
 #include "sources/lastfm.h"
@@ -21,7 +21,9 @@
 #include "pages/song-list.h"
 #include "pages/song-page.h"
 #include "window/window-private.h"
-#include "common/spacing.h"
+#include "common/widgets/spacing.h"
+#include "common/window/navigation.h"
+#include "common/text/numbers.h"
 
 #define SCROLL_FILE "scroll.ini"
 #define SCROLL_GROUP "playlists"
@@ -105,8 +107,7 @@ static char *get_scroll_path(void) {
 
 static void load_scroll_places(Window *window) {
 	g_autofree char *path = get_scroll_path();
-	g_autoptr(GKeyFile) file = load_key_file(path, G_KEY_FILE_NONE);
-	window->scroll_places = file ? g_key_file_ref(file) : g_key_file_new();
+	window->scroll_places = load_key_file(path, G_KEY_FILE_NONE);
 }
 
 
@@ -234,7 +235,8 @@ static void add_local_playlists(Window *window, GPtrArray *playlists) {
 void describe_local_playlist(CrimsonPlaylist *playlist) {
 	guint count = g_list_model_get_n_items(G_LIST_MODEL(playlist->songs));
 	g_free(playlist->subtitle);
-	playlist->subtitle = g_strdup_printf(count == 1 ? TEXT_SONG_COUNT_ONE : TEXT_SONG_COUNT, count);
+	g_autofree char *shown = format_count(count);
+	playlist->subtitle = g_strdup_printf(count == 1 ? TEXT_SONG_COUNT_ONE : TEXT_SONG_COUNT, shown);
 	const char *artwork = "";
 	for (guint index = 0; index < count && !*artwork; index++) {
 		g_autoptr(CrimsonSong) song = g_list_model_get_item(G_LIST_MODEL(playlist->songs), index);
@@ -243,9 +245,7 @@ void describe_local_playlist(CrimsonPlaylist *playlist) {
 	if (g_strcmp0(artwork, playlist->artwork) == 0)
 		return;
 	g_set_str(&playlist->artwork, artwork);
-	GtkWidget *cover = g_object_get_data(G_OBJECT(playlist), "sidebar-cover");
-	if (cover)
-		show_artwork(cover, artwork);
+	show_sidebar_cover(playlist, artwork);
 }
 
 
@@ -297,7 +297,8 @@ static void notice_local_library(gpointer data) {
 	CrimsonPlaylist *playlist = window->local_playlist;
 	guint count = g_list_model_get_n_items(G_LIST_MODEL(playlist->songs));
 	g_free(playlist->subtitle);
-	playlist->subtitle = g_strdup_printf(count == 1 ? TEXT_SONG_COUNT_ONE : TEXT_SONG_COUNT, count);
+	g_autofree char *shown = format_count(count);
+	playlist->subtitle = g_strdup_printf(count == 1 ? TEXT_SONG_COUNT_ONE : TEXT_SONG_COUNT, shown);
 	if (playlist == window->shown) {
 		set_song_page_heading(window->playlist_page, playlist->title, playlist->subtitle, playlist->artwork, FALSE);
 		update_playlist_page(window);
@@ -316,6 +317,11 @@ static void forget_playing_song(Window *window) {
 	window->is_restored = FALSE;
 	g_clear_pointer(&window->current_video, g_free);
 	set_playing_video(NULL);
+	/* The tray and the desktop's media controls stop showing the song as well */
+	window->is_playing = FALSE;
+	set_tray_label(window->tray, 0, TEXT_PLAY);
+	set_mpris_playing(window->mpris, FALSE);
+	set_mpris_song(window->mpris, NULL);
 	gtk_revealer_set_reveal_child(GTK_REVEALER(window->player_revealer), FALSE);
 	clear_queue(window->queue);
 	save_last_song(NULL, NULL, 0, NULL, NULL);
@@ -408,6 +414,9 @@ static void receive_songs(const char *playlist_id, JSCValue *array, gboolean is_
 static void notice_failure(const char *message, const char *playlist_id, gpointer data) {
 	Window *window = data;
 	CrimsonPlaylist *playlist = playlist_id ? find_playlist(window, playlist_id) : NULL;
+	/* A playlist that failed to load is no longer waited for, so it never starts playing later unasked */
+	if (g_strcmp0(window->waiting_play_id, playlist_id) == 0)
+		g_clear_pointer(&window->waiting_play_id, g_free);
 	if (playlist && playlist->incoming) {
 		g_clear_pointer(&playlist->incoming, g_ptr_array_unref);
 		playlist->has_songs = TRUE;
@@ -415,8 +424,9 @@ static void notice_failure(const char *message, const char *playlist_id, gpointe
 			update_playlist_page(window);
 	}
 	stop_waiting(window);
-	g_autofree char *text = g_strdup_printf(TEXT_LOADING_FAILED, message);
-	show_message(window, text);
+	/* The page's own error text is for the log, while the listener reads a plain sentence */
+	g_warning("YouTube Music did not answer: %s", message);
+	show_message(window, TEXT_LOADING_FAILED);
 }
 
 
@@ -755,10 +765,7 @@ GtkWidget *create_sign_in_card(void) {
 
 
 static void hide_to_tray(GtkButton *button, Window *window) {
-	if (is_tray_shown(window->tray))
-		gtk_widget_set_visible(GTK_WIDGET(window->window), FALSE);
-	else
-		gtk_window_minimize(GTK_WINDOW(window->window));
+	hide_window_to_tray(window->tray);
 }
 
 
@@ -813,6 +820,7 @@ static GtkWidget *create_top_bar(Window *window) {
 	gtk_widget_set_visible(window->back_button, FALSE);
 	adw_header_bar_pack_start(ADW_HEADER_BAR(header), window->back_button);
 	window->top_spinner = adw_spinner_new();
+	reveal_after_delay(window->top_spinner, NULL, NULL);
 	gtk_widget_add_css_class(window->top_spinner, "top-spinner");
 	gtk_widget_set_visible(window->top_spinner, FALSE);
 	adw_header_bar_pack_start(ADW_HEADER_BAR(header), window->top_spinner);
@@ -1017,7 +1025,7 @@ Window *create_window(GtkApplication *application) {
 	adw_breakpoint_add_setter(breakpoint, G_OBJECT(window->split), "collapsed", &collapsed);
 	adw_application_window_add_breakpoint(window->window, breakpoint);
 	g_signal_connect(window->window, "close-request", G_CALLBACK(close_window), window);
-	add_side_buttons(window);
+	add_mouse_navigation(GTK_WIDGET(window->window), "win.back", "win.forward");
 	load_cached_playlists(window->playlists, (const char *const *)window->state.playlist_order);
 	load_local_playlists_into(window);
 	update_sidebar(window);
@@ -1039,9 +1047,9 @@ Window *create_window(GtkApplication *application) {
 	TraySetup tray = {TRAY_ENTRIES, G_N_ELEMENTS(TRAY_ENTRIES), "win.play-pause", "win.volume-step"};
 	window->tray = create_tray(G_APPLICATION(application), GTK_WINDOW(window->window), &tray);
 	window->mpris = create_mpris(G_APPLICATION(application), GTK_WINDOW(window->window));
-	note_first_frame(GTK_WIDGET(window->window));
+	watch_window_frames(GTK_WIDGET(window->window));
 	restore_last_song(window);
-	run_after_frame(GTK_WIDGET(window->window), start_engine_later, window);
+	run_after_frame(GTK_WIDGET(window->window), start_engine_later, window, NULL);
 	show_lastfm_reminder(window);
 	show_visuals(window);
 	set_song_love_check(is_song_loved, get_lastfm_user() != NULL);

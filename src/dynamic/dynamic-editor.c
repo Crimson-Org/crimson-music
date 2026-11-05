@@ -1,10 +1,11 @@
 #include "lang/en.h"
 #include "visuals/artwork.h"
-#include "visuals/dialogs.h"
+#include "common/widgets/dialogs.h"
 #include "dynamic/dynamic-editor.h"
 #include "pages/info-dialog.h"
 #include "sources/song-info.h"
-#include "common/spacing.h"
+#include "common/widgets/spacing.h"
+#include "common/text/numbers.h"
 
 /* Without a search only the most common values of a facet show as chips, along with any already chosen */
 #define CHIPS_SHOWN 30
@@ -384,8 +385,9 @@ static GtkWidget *create_preview_row(CrimsonSong *song) {
 static void fill_preview(Editor *editor) {
 	g_autoptr(GPtrArray) songs = filter_dynamic_songs(editor->pool, editor->rules);
 	guint total = g_list_model_get_n_items(editor->pool);
+	g_autofree char *shown = format_count(songs->len);
 	g_autofree char *count = g_strdup_printf(g_dngettext(NULL, TEXT_SONG_COUNT_ONE, TEXT_SONG_COUNT, songs->len),
-		songs->len);
+		shown);
 	gtk_label_set_text(GTK_LABEL(editor->count), count);
 	guint waiting = count_waiting_song_info();
 	g_autofree char *note = waiting ? g_strdup_printf(TEXT_PREVIEW_GATHERING, waiting, total)

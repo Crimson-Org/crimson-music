@@ -1,10 +1,12 @@
 #include "lang/en.h"
 #include "visuals/artwork.h"
-#include "common/loading.h"
+#include "common/widgets/loading.h"
 #include "app/pins.h"
 #include "window/window-private.h"
-#include "common/spacing.h"
+#include "common/widgets/spacing.h"
+#include "visuals/motion.h"
 
+#define SIDEBAR_COVER_KEY "sidebar-cover"
 #define SIDEBAR_ARTWORK_SIZE 32
 #define LOCAL_PLAYLIST_ICON "computer-symbolic"
 
@@ -19,7 +21,7 @@ static void open_row_menu(GtkGestureClick *gesture, int presses, double x, doubl
 
 static GdkContentProvider *start_playlist_drag(GtkDragSource *source, double x, double y, GtkWidget *row) {
 	CrimsonPlaylist *playlist = g_object_get_data(G_OBJECT(row), "playlist");
-	gtk_drag_source_set_icon(source, gtk_widget_paintable_new(row), (int)x, (int)y);
+	show_dragged_widget(source, row, x, y);
 	return gdk_content_provider_new_typed(CRIMSON_TYPE_PLAYLIST, playlist);
 }
 
@@ -74,11 +76,7 @@ static gboolean drop_on_playlist(GtkDropTarget *target, const GValue *value, dou
 	Card *card = g_value_get_boxed(value);
 	if (!card->video_id)
 		return FALSE;
-	g_autoptr(CrimsonSong) song = g_object_new(CRIMSON_TYPE_SONG, NULL);
-	song->id = g_strdup(card->video_id);
-	song->title = g_strdup(card->title);
-	song->artist = g_strdup(card->subtitle);
-	song->artwork = g_strdup(card->artwork);
+	g_autoptr(CrimsonSong) song = create_card_song(card);
 	add_song_to(window, onto, song);
 	return TRUE;
 }
@@ -183,6 +181,28 @@ static void notice_youtube_playlists(GListModel *playlists, guint position, guin
 static GtkWidget *create_media_library_row(Window *window);
 
 
+static void free_cover_reference(gpointer data) {
+	g_weak_ref_clear(data);
+	g_free(data);
+}
+
+
+/* The playlist only points at its row's cover weakly, so a row gone with its playlist never leaves it dangling */
+void remember_sidebar_cover(CrimsonPlaylist *playlist, GtkWidget *cover) {
+	GWeakRef *reference = g_new0(GWeakRef, 1);
+	g_weak_ref_init(reference, cover);
+	g_object_set_data_full(G_OBJECT(playlist), SIDEBAR_COVER_KEY, reference, free_cover_reference);
+}
+
+
+void show_sidebar_cover(CrimsonPlaylist *playlist, const char *artwork) {
+	GWeakRef *reference = g_object_get_data(G_OBJECT(playlist), SIDEBAR_COVER_KEY);
+	g_autoptr(GtkWidget) cover = reference ? g_weak_ref_get(reference) : NULL;
+	if (cover)
+		show_artwork(cover, artwork);
+}
+
+
 /* Playlists kept on this computer carry a small computer in their corner, apart from the YouTube ones */
 static GtkWidget *create_playlist_row(gpointer item, gpointer data) {
 	CrimsonPlaylist *playlist = item;
@@ -194,7 +214,7 @@ static GtkWidget *create_playlist_row(gpointer item, gpointer data) {
 	GtkWidget *artwork = create_cover(SIDEBAR_ARTWORK_SIZE);
 	gtk_widget_set_valign(artwork, GTK_ALIGN_CENTER);
 	show_artwork(artwork, playlist->artwork);
-	g_object_set_data(G_OBJECT(playlist), "sidebar-cover", artwork);
+	remember_sidebar_cover(playlist, artwork);
 	gtk_box_append(GTK_BOX(box), is_local_playlist(playlist) ? add_cover_badge(artwork, LOCAL_PLAYLIST_ICON) : artwork);
 	GtkWidget *label = gtk_label_new(playlist->title);
 	gtk_label_set_xalign(GTK_LABEL(label), 0);
@@ -481,6 +501,7 @@ GtkWidget *create_sidebar(Window *window) {
 	/* Only the YouTube playlists wait for YouTube, under a spinner of their own, while everything kept on this computer
 	 * shows at once */
 	window->playlists_spinner = adw_spinner_new();
+	reveal_after_delay(window->playlists_spinner, NULL, NULL);
 	gtk_widget_add_css_class(window->playlists_spinner, "playlists-spinner");
 	gtk_box_append(GTK_BOX(content), window->playlists_spinner);
 	window->playlists_empty = create_status("view-list-symbolic", TEXT_NO_PLAYLISTS, TEXT_NO_PLAYLISTS_DETAIL);

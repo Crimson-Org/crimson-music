@@ -5,10 +5,6 @@ set -eu
 script_directory=$(cd "$(dirname "$0")" && pwd)
 cd "$script_directory/.."
 
-crimson_remove() {
-	rm -rf "$1"
-}
-
 export PROGRAM="crimson-music"
 export APPLICATION_ID="io.github.CrimsonOrg.CrimsonMusic"
 export VERSION="0.1.0"
@@ -16,17 +12,13 @@ export PREFIX="${HOME}/.local"
 export STD="c11"
 export WARN="-Wall -Wextra -Wpedantic -Werror -Wno-unused-parameter"
 export OPT="-O2 -g"
-export PKGS="gtk4 libadwaita-1 webkitgtk-6.0 libsoup-3.0 sqlite3 gstreamer-1.0 gstreamer-pbutils-1.0"
+export GTK_MINOR="16"
+export ADWAITA_MINOR="8"
+export PKGS="gtk4 >= 4.${GTK_MINOR} libadwaita-1 >= 1.${ADWAITA_MINOR} webkitgtk-6.0 libsoup-3.0 sqlite3 gstreamer-1.0 gstreamer-pbutils-1.0"
 export LIBS="-lm"
 export DEFINES="-DAPPLICATION_VERSION=\"${VERSION}\""
+export VERSION_CHECKS="-DGDK_VERSION_MIN_REQUIRED=GDK_VERSION_4_${GTK_MINOR} -DGDK_VERSION_MAX_ALLOWED=GDK_VERSION_4_${GTK_MINOR} -DADW_VERSION_MIN_REQUIRED=ADW_VERSION_1_${ADWAITA_MINOR} -DADW_VERSION_MAX_ALLOWED=ADW_VERSION_1_${ADWAITA_MINOR}"
 export INCLUDES="-Isrc -Ibuild -Isubprojects/crimson-core/src"
-printf '==> %s\n' 'remove ${PREFIX}/bin/${PROGRAM}'
-crimson_remove "${PREFIX}/bin/${PROGRAM}"
-printf '==> %s\n' 'remove ${PREFIX}/share/applications/${APPLICATION_ID}.desktop'
-crimson_remove "${PREFIX}/share/applications/${APPLICATION_ID}.desktop"
-printf '==> %s\n' 'remove ${PREFIX}/share/icons/hicolor/scalable/apps/${APPLICATION_ID}.svg'
-crimson_remove "${PREFIX}/share/icons/hicolor/scalable/apps/${APPLICATION_ID}.svg"
-printf '==> %s\n' 'remove ${PREFIX}/share/icons/hicolor/symbolic/apps/${APPLICATION_ID}-symbolic.svg'
-crimson_remove "${PREFIX}/share/icons/hicolor/symbolic/apps/${APPLICATION_ID}-symbolic.svg"
-printf '==> %s\n' 'remove ${PREFIX}/share/metainfo/${APPLICATION_ID}.metainfo.xml'
-crimson_remove "${PREFIX}/share/metainfo/${APPLICATION_ID}.metainfo.xml"
+export HEADERS="src/*/*.h build/lastfm-keys.h subprojects/crimson-core/src/*/*.h subprojects/crimson-core/src/*/*/*.h"
+printf '==> %s\n' 'sh subprojects/crimson-core/scripts/uninstall.sh'
+sh subprojects/crimson-core/scripts/uninstall.sh

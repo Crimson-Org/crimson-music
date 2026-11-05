@@ -28,7 +28,7 @@
 ## Why
 
 The YouTube Music website fills the screen with feeds, shelves and recommendations.\
-Crimson Music shows your playlists in a sidebar and the songs of the one you pick, nothing else.
+Crimson Music shows your playlists in a sidebar and the songs of the one you pick, and keeps recommendations to the Home page.
 
 ## About
 
@@ -63,8 +63,8 @@ Ads are removed, and Google's ad and tracking servers are blocked.
 
 ## Building
 
-You need a [C compiler](https://gcc.gnu.org/), [make](https://www.gnu.org/software/make/), [pkg-config](https://www.freedesktop.org/wiki/Software/pkg-config/) and the development files for [GTK4](https://gtk.org), [libadwaita](https://gnome.pages.gitlab.gnome.org/libadwaita/), [WebKitGTK](https://webkitgtk.org), [libsoup](https://libsoup.gnome.org) and [SQLite](https://sqlite.org).\
-On [openSUSE](https://www.opensuse.org/) these come from `sudo zypper install gcc make pkg-config gtk4-devel libadwaita-devel webkitgtk4-devel libsoup-devel sqlite3-devel`.
+You need a [C compiler](https://gcc.gnu.org/), [make](https://www.gnu.org/software/make/), [pkg-config](https://www.freedesktop.org/wiki/Software/pkg-config/) and the development files for [GTK4](https://gtk.org), [libadwaita](https://gnome.pages.gitlab.gnome.org/libadwaita/), [WebKitGTK](https://webkitgtk.org), [libsoup](https://libsoup.gnome.org), [SQLite](https://sqlite.org) and [GStreamer](https://gstreamer.freedesktop.org).\
+On [openSUSE](https://www.opensuse.org/) these come from `sudo zypper install gcc make pkg-config gtk4-devel libadwaita-devel webkitgtk4-devel libsoup-devel sqlite3-devel gstreamer-devel gstreamer-plugins-base-devel`.
 
 Steps:
  1. Clone using `git clone --recurse-submodules https://github.com/Crimson-Org/crimson-music`

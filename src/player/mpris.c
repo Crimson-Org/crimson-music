@@ -1,6 +1,6 @@
 #include <string.h>
 
-#include "common/identity.h"
+#include "common/app/identity.h"
 #include "player/mpris.h"
 
 #define OBJECT_PATH "/org/mpris/MediaPlayer2"

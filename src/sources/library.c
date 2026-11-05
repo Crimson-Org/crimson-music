@@ -3,9 +3,9 @@
 
 #include <glib/gstdio.h>
 
-#include "common/identity.h"
+#include "common/app/identity.h"
 #include "sources/library.h"
-#include "common/key-store.h"
+#include "common/storage/key-store.h"
 
 #define LOCAL_PLAYLISTS_FILE "local-playlists"
 #define CACHE_FOLDER "library"
@@ -88,7 +88,29 @@ static void crimson_song_class_init(CrimsonSongClass *type) {
 }
 
 
+/* Every field of a song starts empty rather than NULL, so a song made from a card or a file shows anywhere */
 static void crimson_song_init(CrimsonSong *song) {
+	for (guint index = 0; index < G_N_ELEMENTS(SONG_FIELDS); index++)
+		*get_field(song, &SONG_FIELDS[index]) = g_strdup("");
+}
+
+
+CrimsonSong *copy_song(CrimsonSong *song) {
+	CrimsonSong *copy = g_object_new(CRIMSON_TYPE_SONG, NULL);
+	for (guint index = 0; index < G_N_ELEMENTS(SONG_FIELDS); index++)
+		g_set_str(get_field(copy, &SONG_FIELDS[index]), *get_field(song, &SONG_FIELDS[index]));
+	return copy;
+}
+
+
+CrimsonSong *create_card_song(const Card *card) {
+	CrimsonSong *song = g_object_new(CRIMSON_TYPE_SONG, NULL);
+	g_set_str(&song->id, card->video_id);
+	g_set_str(&song->title, card->title ? card->title : "");
+	/* A card names the artist only within its subtitle, which is the best text there is until the song plays */
+	g_set_str(&song->artist, card->subtitle ? card->subtitle : "");
+	g_set_str(&song->artwork, card->artwork ? card->artwork : "");
+	return song;
 }
 
 
@@ -169,8 +191,10 @@ static char *read_text(JSCValue *object, const char *name) {
 
 
 static void read_fields(gpointer object, JSCValue *item, const Field *fields, guint count) {
-	for (guint index = 0; index < count; index++)
+	for (guint index = 0; index < count; index++) {
+		g_free(*get_field(object, &fields[index]));
 		*get_field(object, &fields[index]) = read_text(item, fields[index].name);
+	}
 }
 
 
@@ -305,8 +329,10 @@ static GVariant *describe_objects(GPtrArray *objects, const Shape *shape) {
 
 
 static void fill_described(gpointer object, GVariant *tuple, const Shape *shape) {
-	for (guint index = 0; index < shape->count; index++)
+	for (guint index = 0; index < shape->count; index++) {
+		g_free(*get_field(object, &shape->fields[index]));
 		g_variant_get_child(tuple, index, "s", get_field(object, &shape->fields[index]));
+	}
 }
 
 
@@ -504,20 +530,22 @@ void order_playlists(GPtrArray *playlists, const char *const *order) {
 		if (!order || !g_strv_contains(order, playlist->id))
 			g_ptr_array_add(ordered, playlist);
 	}
+	/* Each playlist takes one place, so an id listed twice, or two playlists sharing one, never adds it again */
+	g_autoptr(GHashTable) placed = g_hash_table_new(NULL, NULL);
 	for (guint index = 0; order && order[index]; index++) {
 		for (guint item = 0; item < playlists->len; item++) {
 			CrimsonPlaylist *playlist = g_ptr_array_index(playlists, item);
-			if (strcmp(playlist->id, order[index]) == 0)
+			if (strcmp(playlist->id, order[index]) == 0 && g_hash_table_add(placed, playlist))
 				g_ptr_array_add(ordered, playlist);
 		}
 	}
-	memcpy(playlists->pdata, ordered->pdata, sizeof(gpointer) * ordered->len);
+	memcpy(playlists->pdata, ordered->pdata, sizeof(gpointer) * MIN(ordered->len, playlists->len));
 }
 
 
 static char *get_cache_path(const char *file_name) {
-	return g_build_filename(g_get_user_cache_dir(), get_application_identity()->slug, CACHE_FOLDER, file_name,
-		NULL);
+	g_autofree char *folder = get_cache_file_path(CACHE_FOLDER);
+	return g_build_filename(folder, file_name, NULL);
 }
 
 

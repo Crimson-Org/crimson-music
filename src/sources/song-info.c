@@ -2,11 +2,11 @@
 #include <libsoup/soup.h>
 #include <sqlite3.h>
 
-#include "common/identity.h"
+#include "common/app/identity.h"
 #include "sources/lastfm.h"
 #include "sources/local-library.h"
 #include "sources/song-info.h"
-#include "common/key-store.h"
+#include "common/storage/key-store.h"
 
 #define DATABASE_FILE "song-info.db"
 #define SCRIPT_NAME "song-info.js"

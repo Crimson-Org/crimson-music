@@ -3,8 +3,9 @@
 #include "visuals/artwork.h"
 #include "visuals/motion.h"
 #include "player/player-bar.h"
-#include "common/spacing.h"
+#include "common/widgets/spacing.h"
 #include "app/state.h"
+#include "common/widgets/loading.h"
 
 #define ARTWORK_SIZE 56
 /* Where each artist's name keeps the artist's id and its click */
@@ -180,7 +181,7 @@ static GtkEventController *add_click(GtkWidget *widget, guint button, GCallback 
 static GdkContentProvider *start_song_drag(GtkDragSource *source, double x, double y, PlayerBar *bar) {
 	if (!bar->song)
 		return NULL;
-	gtk_drag_source_set_icon(source, gtk_widget_paintable_new(bar->details), (int)x, (int)y);
+	show_dragged_widget(source, bar->details, x, y);
 	return gdk_content_provider_new_typed(CRIMSON_TYPE_SONG, bar->song);
 }
 
@@ -293,7 +294,7 @@ static void jump_to_upcoming(GtkListBox *list, GtkListBoxRow *row, PlayerBar *ba
 /* Queued songs drag by their place, and dropping one on another queued song moves it there */
 static GdkContentProvider *start_queued_drag(GtkDragSource *source, double x, double y, PlayerBar *bar) {
 	GtkWidget *box = gtk_event_controller_get_widget(GTK_EVENT_CONTROLLER(source));
-	gtk_drag_source_set_icon(source, gtk_widget_paintable_new(box), (int)x, (int)y);
+	show_dragged_widget(source, box, x, y);
 	return gdk_content_provider_new_typed(G_TYPE_INT, GPOINTER_TO_INT(g_object_get_data(G_OBJECT(box), "offset")));
 }
 
@@ -364,16 +365,7 @@ static gboolean drop_on_upcoming(GtkDropTarget *target, const GValue *value, dou
 	Card *card = g_value_get_boxed(value);
 	if (!card->video_id)
 		return FALSE;
-	g_autoptr(CrimsonSong) song = g_object_new(CRIMSON_TYPE_SONG, NULL);
-	song->id = g_strdup(card->video_id);
-	song->title = g_strdup(card->title);
-	song->artist = g_strdup(card->subtitle ? card->subtitle : "");
-	song->artist_id = g_strdup("");
-	song->album = g_strdup("");
-	song->album_id = g_strdup("");
-	song->duration = g_strdup("");
-	song->artwork = g_strdup(card->artwork ? card->artwork : "");
-	song->set_id = g_strdup("");
+	g_autoptr(CrimsonSong) song = create_card_song(card);
 	bar->events->queue_song(song, bar->data);
 	return TRUE;
 }
@@ -607,7 +599,9 @@ static GtkWidget *create_controls(PlayerBar *bar) {
 		"play");
 	gtk_stack_add_named(GTK_STACK(bar->play_stack), gtk_image_new_from_icon_name("media-playback-pause-symbolic"),
 		"pause");
-	gtk_stack_add_named(GTK_STACK(bar->play_stack), adw_spinner_new(), "spinner");
+	GtkWidget *spinner = adw_spinner_new();
+	reveal_after_delay(spinner, NULL, NULL);
+	gtk_stack_add_named(GTK_STACK(bar->play_stack), spinner, "spinner");
 	gtk_button_set_child(GTK_BUTTON(play), bar->play_stack);
 	gtk_box_append(GTK_BOX(box), play);
 	gtk_box_append(GTK_BOX(after), create_action_button("media-skip-forward-symbolic", "win.next", TEXT_NEXT));

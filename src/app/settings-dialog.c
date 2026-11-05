@@ -1,7 +1,7 @@
 #include <adwaita.h>
 
 #include "lang/en.h"
-#include "visuals/dialogs.h"
+#include "common/widgets/dialogs.h"
 #include "sources/lastfm.h"
 #include "sources/local-library.h"
 #include "app/settings-dialog.h"
@@ -88,12 +88,8 @@ static void change_suggestions(AdwSwitchRow *row, GParamSpec *spec, gpointer dat
 static GtkWidget *create_playback_group(void) {
 	GtkWidget *group = adw_preferences_group_new();
 	adw_preferences_group_set_title(ADW_PREFERENCES_GROUP(group), TEXT_PLAYBACK);
-	GtkWidget *resume = adw_switch_row_new();
-	adw_preferences_row_set_title(ADW_PREFERENCES_ROW(resume), TEXT_RESUME_SONGS);
-	adw_action_row_set_subtitle(ADW_ACTION_ROW(resume), TEXT_RESUME_SONGS_DETAIL);
-	adw_switch_row_set_active(ADW_SWITCH_ROW(resume), get_settings()->resumes_songs);
-	g_signal_connect(resume, "notify::active", G_CALLBACK(change_resume), NULL);
-	adw_preferences_group_add(ADW_PREFERENCES_GROUP(group), resume);
+	add_switch(group, TEXT_RESUME_SONGS, TEXT_RESUME_SONGS_DETAIL, get_settings()->resumes_songs,
+		G_CALLBACK(change_resume));
 	add_switch(group, TEXT_RESTORE_LAST_SONG, TEXT_RESTORE_LAST_SONG_DETAIL, get_settings()->restores_last_song,
 		G_CALLBACK(change_restore));
 	add_switch(group, TEXT_AUTOPLAY_VIDEO, TEXT_AUTOPLAY_VIDEO_DETAIL, get_settings()->autoplays_videos,

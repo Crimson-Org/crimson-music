@@ -1,6 +1,6 @@
 #include <adwaita.h>
 
-#include "common/key-store.h"
+#include "common/storage/key-store.h"
 #include "app/settings.h"
 
 #define SETTINGS_FILE "settings.ini"

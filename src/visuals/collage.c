@@ -4,10 +4,11 @@
 
 #include "visuals/artwork.h"
 #include "visuals/collage.h"
-#include "common/identity.h"
-#include "common/key-store.h"
+#include "common/app/identity.h"
+#include "common/storage/key-store.h"
 
 #define COLLAGE_FOLDER "collages"
+#define KEPT_COLLAGE_DAYS 60
 #define COLLAGE_SIZE 600
 #define COVER_COUNT 3
 /* The front cover and the two behind it, which lean out to the sides */
@@ -55,7 +56,8 @@ static char *get_collage_path(GPtrArray *addresses) {
 		g_string_append_printf(joined, "%s\n", (char *)g_ptr_array_index(addresses, index));
 	g_autofree char *name = g_compute_checksum_for_string(G_CHECKSUM_SHA1, joined->str, -1);
 	g_autofree char *file = g_strconcat(name, ".png", NULL);
-	return g_build_filename(g_get_user_cache_dir(), get_application_identity()->slug, COLLAGE_FOLDER, file, NULL);
+	g_autofree char *folder = get_cache_file_path(COLLAGE_FOLDER);
+	return g_build_filename(folder, file, NULL);
 }
 
 
@@ -198,33 +200,18 @@ typedef struct {
 } CoverRequest;
 
 
-static void receive_cover(GObject *source, GAsyncResult *result, gpointer data);
-
-
-static void request_cover(CoverRequest *request, const char *address) {
-	g_autoptr(SoupMessage) message = soup_message_new(SOUP_METHOD_GET, address);
-	if (!message) {
-		g_clear_pointer(&request->fallback, g_free);
-		receive_cover(NULL, NULL, request);
-		return;
-	}
-	soup_session_send_and_read_async(session, message, G_PRIORITY_LOW, NULL, receive_cover, request);
-}
+static void request_cover(CoverRequest *request, const char *address);
 
 
 /* Covers that failed leave gaps, which close up so the stack always starts at the front */
-static void receive_cover(GObject *source, GAsyncResult *result, gpointer data) {
-	CoverRequest *request = data;
+static void finish_cover(CoverRequest *request, GBytes *bytes) {
 	Collage *collage = request->collage;
-	g_autoptr(GBytes) bytes = source ? soup_session_send_and_read_finish(SOUP_SESSION(source), result, NULL) : NULL;
-	SoupMessage *message = source ? soup_session_get_async_result_message(SOUP_SESSION(source), result) : NULL;
-	gboolean is_ok = bytes && message && SOUP_STATUS_IS_SUCCESSFUL(soup_message_get_status(message));
-	if (!is_ok && request->fallback) {
+	if (!bytes && request->fallback) {
 		g_autofree char *fallback = g_steal_pointer(&request->fallback);
 		request_cover(request, fallback);
 		return;
 	}
-	collage->covers[request->index] = is_ok ? read_cover(bytes) : NULL;
+	collage->covers[request->index] = bytes ? read_cover(bytes) : NULL;
 	g_free(request->fallback);
 	g_free(request);
 	if (--collage->waiting > 0)
@@ -238,6 +225,46 @@ static void receive_cover(GObject *source, GAsyncResult *result, gpointer data) 
 		collage->covers[index] = NULL;
 	collage->count = kept;
 	finish_collage(collage);
+}
+
+
+static void receive_cover(GObject *source, GAsyncResult *result, gpointer data) {
+	g_autoptr(GBytes) bytes = soup_session_send_and_read_finish(SOUP_SESSION(source), result, NULL);
+	SoupMessage *message = soup_session_get_async_result_message(SOUP_SESSION(source), result);
+	gboolean is_ok = bytes && message && SOUP_STATUS_IS_SUCCESSFUL(soup_message_get_status(message));
+	finish_cover(data, is_ok ? bytes : NULL);
+}
+
+
+static void receive_local_cover(GObject *source, GAsyncResult *result, gpointer data) {
+	g_autoptr(GBytes) bytes = g_file_load_bytes_finish(G_FILE(source), result, NULL, NULL);
+	finish_cover(data, bytes);
+}
+
+
+static gboolean give_up_cover(gpointer data) {
+	finish_cover(data, NULL);
+	return G_SOURCE_REMOVE;
+}
+
+
+/* Local songs keep their covers as files, read from disk, while every answer comes after the request returns, so
+ * the loop asking for covers never sees its collage finish under it */
+static void request_cover(CoverRequest *request, const char *address) {
+	gboolean is_local = g_str_has_prefix(address, "/") || g_str_has_prefix(address, "file://");
+	g_autoptr(GFile) file = !is_local ? NULL : *address == '/' ? g_file_new_for_path(address)
+		: g_file_new_for_uri(address);
+	if (file) {
+		g_file_load_bytes_async(file, NULL, receive_local_cover, request);
+		return;
+	}
+	g_autoptr(SoupMessage) message = soup_message_new(SOUP_METHOD_GET, address);
+	if (!message) {
+		g_clear_pointer(&request->fallback, g_free);
+		g_idle_add(give_up_cover, request);
+		return;
+	}
+	soup_session_send_and_read_async(session, message, G_PRIORITY_LOW, NULL, receive_cover, request);
 }
 
 
@@ -258,8 +285,19 @@ static gboolean give_known_collage(gpointer data) {
 
 
 void make_collage(GPtrArray *addresses, CollageReady ready, gpointer data) {
+	/* Collages of playlists that changed or went are never shown again, so they go once nothing used them for a
+	 * while, before any collage is looked for, so none in use can go while it is read; there are only a few */
+	static gboolean is_trimmed;
+	if (!is_trimmed) {
+		g_autofree char *folder = get_cache_file_path(COLLAGE_FOLDER);
+		remove_old_files(folder, KEPT_COLLAGE_DAYS);
+		is_trimmed = TRUE;
+	}
 	g_autofree char *path = get_collage_path(addresses);
-	if (g_file_test(path, G_FILE_TEST_IS_REGULAR) || !addresses->len) {
+	gboolean is_known = g_file_test(path, G_FILE_TEST_IS_REGULAR);
+	if (is_known)
+		mark_file_used(path);
+	if (is_known || !addresses->len) {
 		KnownCollage *known = g_new0(KnownCollage, 1);
 		known->path = addresses->len ? g_steal_pointer(&path) : NULL;
 		known->ready = ready;
@@ -273,8 +311,9 @@ void make_collage(GPtrArray *addresses, CollageReady ready, gpointer data) {
 	collage->path = g_steal_pointer(&path);
 	collage->ready = ready;
 	collage->data = data;
-	collage->waiting = (int)MIN(addresses->len, COVER_COUNT);
-	for (int index = 0; index < collage->waiting; index++) {
+	int count = (int)MIN(addresses->len, COVER_COUNT);
+	collage->waiting = count;
+	for (int index = 0; index < count; index++) {
 		const char *original = g_ptr_array_index(addresses, index);
 		g_autofree char *address = enlarge_address(original);
 		CoverRequest *request = g_new0(CoverRequest, 1);
