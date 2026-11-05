@@ -2,7 +2,6 @@
 
 #include "lang/en.h"
 #include "app/application.h"
-#include "common/themes/themes.h"
 #include "app/settings-dialog.h"
 #include "app/settings.h"
 #include "window/window.h"
@@ -32,8 +31,6 @@ static void start_up(GApplication *application) {
 	};
 	g_action_map_add_action_entries(G_ACTION_MAP(application), ENTRIES, G_N_ELEMENTS(ENTRIES), application);
 	apply_style();
-	/* Only the title bar follows the Crimson themes, so it turns light with the light style */
-	use_themes(DEFAULT_LIGHT_THEME, DEFAULT_DARK_THEME, THEME_TITLE_BAR);
 }
 
 

@@ -16,9 +16,13 @@ void free_lyric_line(LyricLine *line);
 /* The words of the playing song across the middle of the window, under its title and artist, with timed lines
  * following the song and leading to their place when clicked */
 GtkWidget *create_lyrics_page(LyricChosen chosen, gpointer data);
+/* The song the words belong to, whose cover colours the page, with NULL for any part it lacks */
+typedef struct {
+	const char *title, *artist, *artwork;
+} LyricsSong;
+
 /* Shows timed lines when there are any, the plain text otherwise, and that YouTube has none when both are empty,
  * while a NULL text shows the title alone as the words are still coming */
-void show_lyrics(GtkWidget *page, const char *title, const char *artist, const char *text, const char *source,
-	GPtrArray *lines);
+void show_lyrics(GtkWidget *page, const LyricsSong *song, const char *text, const char *source, GPtrArray *lines);
 /* Lights the line being sung and keeps it in the middle of the page */
 void follow_lyrics(GtkWidget *page, double seconds);

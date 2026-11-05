@@ -16,20 +16,22 @@
 #define SKELETON_CARDS 6
 #define SKELETON_COVER 40
 #define SKELETON_LINE 12
-#define SKELETON_CARD 120
 #define SKELETON_HEADING 140
 /* The heading shape stands a little taller than a line, and each row's second line is a shorter one two widths on */
 #define SKELETON_HEADING_EXTRA 4
 #define SKELETON_SECOND_LINE_OFFSET 2
 static const int SKELETON_TITLE_WIDTHS[] = {260, 180, 320, 220, 280};
 #define CARD_GRID_SPACING 6
-/* A changed shelf crossfades to its new cards, and a shelf that comes or goes slides open or shut, in this time */
+/* A shelf that comes or goes slides open or shut in this time, while one whose cards changed shows the new ones at
+ * once, as any refresh of data on screen does */
 #define SHELF_MOTION_MILLISECONDS 300
 #define SHELF_TITLE_KEY "shelf-title"
 #define SHELF_CARDS_KEY "shelf-cards"
 #define SHELF_ROWS_KEY "shelf-rows"
+#define PAGE_EDGE_KEY "page-edge"
 #define HEADING_ARTWORK_SIZE 120
-#define CARD_ARTWORK_SIZE 120
+/* Cards are fetched at the size they show, sharp at any width of the page */
+#define CARD_ARTWORK_SIZE 160
 
 /* The Last.fm text beside the heading stays a short paragraph, with the whole of it in its tooltip */
 #define ABOUT_LINES 4
@@ -37,6 +39,12 @@ static const int SKELETON_TITLE_WIDTHS[] = {260, 180, 320, 220, 280};
 /* The heading drops the Last.fm text below this width, when the comments beside it or a narrow window leave too
  * little room for it and the title */
 #define ABOUT_ROOM "max-width: 820px"
+
+/* Headings, cards and songs keep to one centred column this wide, so on a wide window the eye never travels far
+ * from a song's title to its length */
+#define CONTENT_WIDTH 1040
+/* From this width a page has room to give the album a column of its own in its song rows */
+#define ALBUM_ROOM "min-width: 820px"
 
 #define HERO_RESOLUTION 1200
 #define BANNER_HEIGHT 180
@@ -51,6 +59,10 @@ struct SongPage {
 	gboolean is_profile;
 	/* What Last.fm tells of an artist or album, beside the heading's title */
 	GtkWidget *about, *about_text, *about_facts;
+	/* Last.fm's line of facts, which takes the place under the title when the page gives none of its own, so every
+	 * heading has a line there */
+	char *facts;
+	gboolean has_own_detail;
 	GtkWidget *cards, *songs_heading, *stack, *list, *empty, *skeleton_cards, *scrolled;
 	/* A place to scroll back to once the list has grown long enough to reach it */
 	double wanted_scroll;
@@ -83,6 +95,7 @@ static void free_song_page(gpointer data) {
 	g_clear_object(&page->song_filter);
 	g_clear_pointer(&page->query, g_free);
 	g_clear_pointer(&page->artwork, g_free);
+	g_clear_pointer(&page->facts, g_free);
 	g_clear_pointer(&page->pin, free_card);
 	g_free(page);
 }
@@ -295,7 +308,7 @@ static GtkWidget *create_skeleton(SongPage *page) {
 	gtk_box_append(GTK_BOX(page->skeleton_cards), heading_bone);
 	GtkWidget *cards = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, SPACING_NORMAL);
 	for (guint index = 0; index < SKELETON_CARDS; index++)
-		gtk_box_append(GTK_BOX(cards), create_bone(SKELETON_CARD, SKELETON_CARD, index));
+		gtk_box_append(GTK_BOX(cards), create_bone(CARD_ARTWORK_SIZE, CARD_ARTWORK_SIZE, index));
 	/* The shapes are cut off at the edge as the cards they stand for scroll, so they never widen the window */
 	GtkWidget *edge = gtk_scrolled_window_new();
 	gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(edge), GTK_POLICY_EXTERNAL, GTK_POLICY_NEVER);
@@ -315,34 +328,49 @@ void set_song_page_waits_for_cards(SongPage *page, gboolean is_waiting) {
 }
 
 
+/* A plain clamp grows and shrinks with the window up to the column's width, rather than easing in its margins
+ * before that */
+static GtkWidget *create_column(GtkWidget *child) {
+	GtkWidget *clamp = adw_clamp_new();
+	adw_clamp_set_maximum_size(ADW_CLAMP(clamp), CONTENT_WIDTH);
+	adw_clamp_set_tightening_threshold(ADW_CLAMP(clamp), CONTENT_WIDTH);
+	adw_clamp_set_child(ADW_CLAMP(clamp), child);
+	return clamp;
+}
+
+
 /* The heading sits on a still blur of its own cover, which sets it apart from the songs below */
 static GtkWidget *create_heading(SongPage *page) {
 	page->heading = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, SPACING_LARGE);
 	gtk_widget_add_css_class(page->heading, "page-heading");
-	/* Every heading is as tall as its cover whatever loads into it, so the page never jumps while it fills in */
-	gtk_widget_set_size_request(page->heading, -1, HEADING_ARTWORK_SIZE);
+
 	page->cover_slot = adw_bin_new();
 	gtk_widget_set_valign(page->cover_slot, GTK_ALIGN_CENTER);
 	gtk_box_append(GTK_BOX(page->heading), page->cover_slot);
 	add_heading_drag(page->cover_slot, page);
+	/* The title starts level with the cover's top and the buttons end level with its bottom, and the words are as
+	 * tall as a cover whether the heading has one or not, so every heading puts them in the same place and the page
+	 * never jumps while it fills in */
 	GtkWidget *labels = gtk_box_new(GTK_ORIENTATION_VERTICAL, SPACING_SMALL);
-	gtk_widget_set_valign(labels, GTK_ALIGN_CENTER);
+	gtk_widget_set_size_request(labels, -1, HEADING_ARTWORK_SIZE);
 	gtk_widget_set_hexpand(labels, TRUE);
 	page->title = gtk_label_new(NULL);
 	page->detail = gtk_label_new(NULL);
 	gtk_widget_add_css_class(page->title, "title-1");
 	add_heading_drag(page->title, page);
 	gtk_widget_add_css_class(page->detail, "dimmed");
+	gtk_widget_add_css_class(page->detail, "heading-detail");
 	for (GtkWidget *label = page->title; label; label = label == page->title ? page->detail : NULL) {
 		gtk_label_set_xalign(GTK_LABEL(label), 0);
 		gtk_label_set_ellipsize(GTK_LABEL(label), PANGO_ELLIPSIZE_END);
 		gtk_box_append(GTK_BOX(labels), label);
 	}
 	GtkWidget *buttons = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, SPACING_NORMAL);
-	gtk_widget_set_margin_top(buttons, SPACING_NORMAL);
+	gtk_widget_set_vexpand(buttons, TRUE);
+	gtk_widget_set_valign(buttons, GTK_ALIGN_END);
 	page->play_button = create_pill("media-playback-start-symbolic", TEXT_PLAY, page);
 	gtk_widget_add_css_class(page->play_button, "suggested-action");
-	page->shuffle_button = create_pill("media-playlist-shuffle-symbolic", TEXT_RANDOM, page);
+	page->shuffle_button = create_pill("media-playlist-shuffle-symbolic", TEXT_SHUFFLE, page);
 	gtk_box_append(GTK_BOX(buttons), page->play_button);
 	gtk_box_append(GTK_BOX(buttons), page->shuffle_button);
 	gtk_box_append(GTK_BOX(buttons), create_search_button(page));
@@ -379,7 +407,7 @@ static GtkWidget *create_heading(SongPage *page) {
 	gtk_widget_set_size_request(room, 1, 1);
 	/* The cover's glow reaches past the heading, which a breakpoint bin would cut off at its edge */
 	gtk_widget_set_overflow(room, GTK_OVERFLOW_VISIBLE);
-	adw_breakpoint_bin_set_child(ADW_BREAKPOINT_BIN(room), page->heading);
+	adw_breakpoint_bin_set_child(ADW_BREAKPOINT_BIN(room), create_column(page->heading));
 	AdwBreakpoint *narrow = adw_breakpoint_new(adw_breakpoint_condition_parse(ABOUT_ROOM));
 	GValue hidden = G_VALUE_INIT;
 	g_value_init(&hidden, G_TYPE_BOOLEAN);
@@ -484,6 +512,7 @@ void set_song_page_scroll(SongPage *page, double value) {
 static GtkWidget *create_body(SongPage *page) {
 	GtkWidget *scrolled = gtk_scrolled_window_new();
 	page->scrolled = scrolled;
+	gtk_widget_add_css_class(scrolled, "page-scroller");
 	g_object_set_data(G_OBJECT(scrolled), "song-page", page);
 	/* A place asked for before the window is on screen is watched for once the page shows */
 	g_signal_connect_swapped(scrolled, "map", G_CALLBACK(watch_layouts), page);
@@ -494,7 +523,11 @@ static GtkWidget *create_body(SongPage *page) {
 	gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
 	add_smooth_scrolling(GTK_SCROLLED_WINDOW(scrolled));
 	if (page->is_long) {
-		gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled), page->list);
+		GtkWidget *column = adw_clamp_scrollable_new();
+		adw_clamp_scrollable_set_maximum_size(ADW_CLAMP_SCROLLABLE(column), CONTENT_WIDTH);
+		adw_clamp_scrollable_set_tightening_threshold(ADW_CLAMP_SCROLLABLE(column), CONTENT_WIDTH);
+		adw_clamp_scrollable_set_child(ADW_CLAMP_SCROLLABLE(column), page->list);
+		gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled), column);
 		return scrolled;
 	}
 	GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, SPACING_NORMAL);
@@ -503,8 +536,33 @@ static GtkWidget *create_body(SongPage *page) {
 	page->songs_heading = create_section_heading(TEXT_SONGS);
 	gtk_box_append(GTK_BOX(box), page->songs_heading);
 	gtk_box_append(GTK_BOX(box), page->list);
-	gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled), box);
+	gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled), create_column(box));
 	return scrolled;
+}
+
+
+static void show_album_column(SongPage *page) {
+	set_song_list_album_column(page->list, TRUE);
+}
+
+
+static void hide_album_column(SongPage *page) {
+	set_song_list_album_column(page->list, FALSE);
+}
+
+
+/* The page's own width decides the album column, so the comments beside it narrow the rows as a smaller window
+ * does */
+static GtkWidget *create_album_room(SongPage *page) {
+	GtkWidget *room = adw_breakpoint_bin_new();
+	gtk_widget_set_size_request(room, 1, 1);
+	gtk_widget_set_vexpand(room, TRUE);
+	adw_breakpoint_bin_set_child(ADW_BREAKPOINT_BIN(room), page->stack);
+	AdwBreakpoint *wide = adw_breakpoint_new(adw_breakpoint_condition_parse(ALBUM_ROOM));
+	g_signal_connect_swapped(wide, "apply", G_CALLBACK(show_album_column), page);
+	g_signal_connect_swapped(wide, "unapply", G_CALLBACK(hide_album_column), page);
+	adw_breakpoint_bin_add_breakpoint(ADW_BREAKPOINT_BIN(room), wide);
+	return room;
 }
 
 
@@ -533,12 +591,12 @@ SongPage *create_song_page(const SongPageEvents *events, gpointer data, gboolean
 	 * out of it */
 	GtkWidget *skeleton = gtk_scrolled_window_new();
 	gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(skeleton), GTK_POLICY_NEVER, GTK_POLICY_EXTERNAL);
-	gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(skeleton), create_skeleton(page));
+	gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(skeleton), create_column(create_skeleton(page)));
 	gtk_stack_add_named(GTK_STACK(page->stack), skeleton, "loading");
 	gtk_stack_add_named(GTK_STACK(page->stack), create_body(page), "songs");
 	page->empty = create_status("view-list-symbolic", TEXT_EMPTY_PLAYLIST);
 	gtk_stack_add_named(GTK_STACK(page->stack), page->empty, "empty");
-	gtk_box_append(GTK_BOX(page->root), page->stack);
+	gtk_box_append(GTK_BOX(page->root), create_album_room(page));
 	return page;
 }
 
@@ -582,6 +640,20 @@ void set_song_page_profile(SongPage *page) {
 }
 
 
+/* The line under the title is the page's own, or Last.fm's facts in its place, fading in when it arrives */
+static void show_heading_detail(SongPage *page, const char *detail) {
+	const char *shown = page->has_own_detail ? detail : page->facts ? page->facts : "";
+	gtk_label_set_text(GTK_LABEL(page->detail), shown);
+	if (*shown)
+		gtk_widget_remove_css_class(page->detail, "waiting");
+	else
+		gtk_widget_add_css_class(page->detail, "waiting");
+	gboolean has_facts_beside = page->has_own_detail && page->facts;
+	gtk_label_set_text(GTK_LABEL(page->about_facts), has_facts_beside ? page->facts : "");
+	gtk_widget_set_visible(page->about_facts, has_facts_beside);
+}
+
+
 void set_song_page_heading(SongPage *page, const char *title, const char *detail, const char *artwork,
 	gboolean is_round) {
 	gboolean is_banner = is_round && !page->is_profile;
@@ -592,7 +664,8 @@ void set_song_page_heading(SongPage *page, const char *title, const char *detail
 		gtk_widget_remove_css_class(page->title, "waiting");
 	else
 		gtk_widget_add_css_class(page->title, "waiting");
-	gtk_label_set_text(GTK_LABEL(page->detail), detail ? detail : "");
+	page->has_own_detail = detail && *detail;
+	show_heading_detail(page, detail);
 	GtkWidget *shown = adw_bin_get_child(ADW_BIN(page->cover_slot));
 	if (shown && artwork && g_strcmp0(artwork, page->artwork) == 0 && gtk_widget_has_css_class(shown, "round") == is_round)
 		return;
@@ -710,6 +783,7 @@ static GdkContentProvider *start_card_drag(GtkDragSource *source, double x, doub
 static GtkWidget *create_card(Card *card, gboolean is_round, SongPage *page) {
 	GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, SPACING_SMALL);
 	GtkWidget *cover = create_cover(CARD_ARTWORK_SIZE);
+	set_cover_resolution(cover, CARD_ARTWORK_SIZE);
 	if (is_round)
 		gtk_widget_add_css_class(cover, "round");
 	show_artwork(cover, card->artwork);
@@ -726,6 +800,8 @@ static GtkWidget *create_card(Card *card, gboolean is_round, SongPage *page) {
 		GtkWidget *label = gtk_label_new(texts[index]);
 		gtk_label_set_ellipsize(GTK_LABEL(label), PANGO_ELLIPSIZE_END);
 		gtk_label_set_max_width_chars(GTK_LABEL(label), 1);
+		/* Words start at the picture's edge, in line with the headings and songs, so cut ones end evenly too */
+		gtk_label_set_xalign(GTK_LABEL(label), 0);
 		gtk_widget_set_size_request(label, CARD_ARTWORK_SIZE, -1);
 		gtk_widget_add_css_class(label, index ? "card-detail" : "card-title");
 		gtk_box_append(GTK_BOX(box), label);
@@ -762,6 +838,34 @@ static void stagger_entrance(GtkWidget *card, guint index) {
 }
 
 
+static void measure_shelf_room(GtkWidget *room, GtkOrientation orientation, int for_size, int *minimum,
+	int *natural, int *minimum_baseline, int *natural_baseline) {
+	gtk_widget_measure(gtk_widget_get_first_child(room), orientation, for_size, minimum, natural, minimum_baseline,
+		natural_baseline);
+}
+
+
+/* A row of cards starts at the column's edge like everything on the page but runs on to the page's own right edge,
+ * so the window cuts it, as a row that goes on, rather than the middle of the page */
+static void allocate_shelf_room(GtkWidget *room, int width, int height, int baseline) {
+	GtkWidget *page_edge = g_object_get_data(G_OBJECT(room), PAGE_EDGE_KEY);
+	graphene_point_t place;
+	int reach = 0;
+	if (page_edge && gtk_widget_compute_point(room, page_edge, &GRAPHENE_POINT_INIT(0, 0), &place))
+		reach = MAX(0, gtk_widget_get_width(page_edge) - (int)place.x - width);
+	gtk_widget_allocate(gtk_widget_get_first_child(room), width + reach, height, baseline, NULL);
+}
+
+
+static GtkWidget *create_shelf_room(SongPage *page, GtkWidget *shelf) {
+	GtkWidget *room = adw_bin_new();
+	gtk_widget_set_layout_manager(room, gtk_custom_layout_new(NULL, measure_shelf_room, allocate_shelf_room));
+	g_object_set_data(G_OBJECT(room), PAGE_EDGE_KEY, page->scrolled);
+	adw_bin_set_child(ADW_BIN(room), shelf);
+	return room;
+}
+
+
 static GtkWidget *create_card_row(SongPage *page, GPtrArray *cards, gboolean is_round, gboolean is_staggered) {
 	GtkWidget *row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, SPACING_SMALL);
 	gtk_widget_add_css_class(row, "card-row");
@@ -772,10 +876,11 @@ static GtkWidget *create_card_row(SongPage *page, GPtrArray *cards, gboolean is_
 		gtk_box_append(GTK_BOX(row), card);
 	}
 	GtkWidget *scrolled = gtk_scrolled_window_new();
+	gtk_widget_add_css_class(scrolled, "card-shelf");
 	gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled), GTK_POLICY_AUTOMATIC, GTK_POLICY_NEVER);
 	gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled), row);
 	add_smooth_scrolling(GTK_SCROLLED_WINDOW(scrolled));
-	return scrolled;
+	return create_shelf_room(page, scrolled);
 }
 
 
@@ -810,29 +915,16 @@ static char *describe_shelf(Shelf *shelf) {
 }
 
 
-/* The row a shelf showed before stays only until its new row has faded in over it */
-static void drop_hidden_rows(GtkStack *rows) {
-	if (gtk_stack_get_transition_running(rows))
-		return;
-	GtkWidget *shown = gtk_stack_get_visible_child(rows);
-	GtkWidget *next = NULL;
-	for (GtkWidget *row = gtk_widget_get_first_child(GTK_WIDGET(rows)); row; row = next) {
-		next = gtk_widget_get_next_sibling(row);
-		if (row != shown)
-			gtk_stack_remove(rows, row);
-	}
-}
-
-
 static void fill_shelf(SongPage *page, GtkWidget *widget, Shelf *shelf, gboolean is_staggered) {
 	g_autofree char *description = describe_shelf(shelf);
 	if (g_strcmp0(description, g_object_get_data(G_OBJECT(widget), SHELF_CARDS_KEY)) == 0)
 		return;
 	g_object_set_data_full(G_OBJECT(widget), SHELF_CARDS_KEY, g_steal_pointer(&description), g_free);
-	GtkStack *rows = g_object_get_data(G_OBJECT(widget), SHELF_ROWS_KEY);
-	GtkWidget *row = create_card_row(page, shelf->cards, shelf->is_round, is_staggered);
-	gtk_stack_add_child(rows, row);
-	gtk_stack_set_visible_child(rows, row);
+	GtkWidget *rows = g_object_get_data(G_OBJECT(widget), SHELF_ROWS_KEY);
+	GtkWidget *old = gtk_widget_get_first_child(rows);
+	if (old)
+		gtk_box_remove(GTK_BOX(rows), old);
+	gtk_box_append(GTK_BOX(rows), create_card_row(page, shelf->cards, shelf->is_round, is_staggered));
 	gtk_widget_set_visible(widget, filter_cards(widget, page->query));
 }
 
@@ -847,10 +939,7 @@ static void drop_closed_shelf(GtkRevealer *shelf, GParamSpec *spec, SongPage *pa
 static GtkWidget *create_shelf(SongPage *page, Shelf *shelf, gboolean is_first) {
 	GtkWidget *section = gtk_box_new(GTK_ORIENTATION_VERTICAL, SPACING_NORMAL);
 	gtk_box_append(GTK_BOX(section), create_section_heading(shelf->title));
-	GtkWidget *rows = gtk_stack_new();
-	gtk_stack_set_transition_type(GTK_STACK(rows), GTK_STACK_TRANSITION_TYPE_CROSSFADE);
-	gtk_stack_set_transition_duration(GTK_STACK(rows), SHELF_MOTION_MILLISECONDS);
-	g_signal_connect(rows, "notify::transition-running", G_CALLBACK(drop_hidden_rows), NULL);
+	GtkWidget *rows = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
 	gtk_box_append(GTK_BOX(section), rows);
 	GtkWidget *widget = gtk_revealer_new();
 	gtk_revealer_set_transition_type(GTK_REVEALER(widget), GTK_REVEALER_TRANSITION_TYPE_SLIDE_DOWN);
@@ -948,7 +1037,9 @@ void set_song_page_about(SongPage *page, const char *text, const char *facts) {
 	gboolean has_text = text && *text, has_facts = facts && *facts;
 	gtk_label_set_text(GTK_LABEL(page->about_text), has_text ? text : "");
 	gtk_widget_set_tooltip_text(page->about_text, has_text ? text : NULL);
-	gtk_label_set_text(GTK_LABEL(page->about_facts), has_facts ? facts : "");
+	g_set_str(&page->facts, has_facts ? facts : NULL);
+	g_autofree char *detail = g_strdup(gtk_label_get_text(GTK_LABEL(page->detail)));
+	show_heading_detail(page, detail);
 	gtk_widget_set_visible(page->about, TRUE);
 	gtk_widget_remove_css_class(page->about, "waiting");
 }

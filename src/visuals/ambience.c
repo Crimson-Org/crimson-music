@@ -43,6 +43,14 @@
 #define ACCENT_VALUE_MINIMUM 0.55
 #define ACCENT_VALUE_MAXIMUM 0.8
 #define ACCENT_SATURATION_MINIMUM 0.45
+/* The colours of icons and words on the accent, as libadwaita draws them on its own light and dark accents */
+#define LIGHT_ACCENT_TEXT "white"
+#define DARK_ACCENT_TEXT "rgb(0 0 6 / 80%)"
+/* How much each channel adds to a colour's brightness, and the brightness above which an accent takes dark text */
+#define BRIGHTNESS_RED 0.2126
+#define BRIGHTNESS_GREEN 0.7152
+#define BRIGHTNESS_BLUE 0.0722
+#define BRIGHT_ACCENT 0.5
 /* Keeps the backdrop colours rich enough to show through the veil without glaring */
 #define BLOB_SATURATION_MINIMUM 0.35
 #define BLOB_VALUE_MINIMUM 0.35
@@ -764,6 +772,14 @@ static GdkRGBA adjust_color(GdkRGBA color, double saturation_minimum, double val
 }
 
 
+/* Icons and words on the accent turn dark once it is bright, by the same measure the Crimson themes use */
+static const char *pick_accent_text(const GdkRGBA *accent) {
+	double brightness = BRIGHTNESS_RED * accent->red + BRIGHTNESS_GREEN * accent->green
+		+ BRIGHTNESS_BLUE * accent->blue;
+	return brightness > BRIGHT_ACCENT ? DARK_ACCENT_TEXT : LIGHT_ACCENT_TEXT;
+}
+
+
 static void apply_accent(CrimsonAmbience *ambience, GdkRGBA accent) {
 	if (!ambience->accent) {
 		ambience->accent = gtk_css_provider_new();
@@ -782,8 +798,8 @@ static void apply_accent(CrimsonAmbience *ambience, GdkRGBA accent) {
 	g_free(ambience->accent_class);
 	ambience->accent_class = g_strdup_printf("%s-%u", ambience->style_class, ++ambience->accent_count);
 	g_autofree char *color = gdk_rgba_to_string(&accent);
-	g_autofree char *css = g_strdup_printf("ambience.%s { --accent-bg-color: %s; --accent-color: %s; }",
-		ambience->accent_class, color, color);
+	g_autofree char *css = g_strdup_printf("ambience.%s { --accent-bg-color: %s; --accent-color: %s; "
+		"--accent-fg-color: %s; }", ambience->accent_class, color, color, pick_accent_text(&accent));
 	gtk_css_provider_load_from_string(ambience->accent, css);
 	gtk_widget_add_css_class(widget, ambience->accent_class);
 }

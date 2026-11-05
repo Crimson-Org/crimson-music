@@ -48,6 +48,8 @@ void save_dynamic_playlists(GPtrArray *playlists);
 /* The facet values of a song in lowercase, which are the keys the rules hold, without the facet name */
 GPtrArray *get_song_facet_values(CrimsonSong *song, Facet facet);
 char *make_facet_key(Facet facet, const char *value);
+/* A genre or tag as it shows wherever the listener sees one, with capitals, so "synth-pop" shows as "Synth-Pop" */
+char *format_tag(const char *tag);
 /* The song's number for a range, or a negative one when it is not known */
 double get_song_range_value(CrimsonSong *song, RangeKind kind);
 

@@ -21,7 +21,7 @@
 
 /* Widgets of one row, looked up again when the row shows another song */
 typedef struct {
-	GtkWidget *revealer, *box, *artwork, *title, *details, *length, *like, *dislike, *love, *add;
+	GtkWidget *revealer, *box, *artwork, *columns, *title, *details, *album, *length, *like, *dislike, *love, *add;
 	GtkListItem *item;
 	GtkWidget *list;
 } SongRow;
@@ -37,6 +37,8 @@ typedef struct {
 	gboolean is_extras_addable;
 	/* The songs and the extra songs as the two sections the list shows */
 	GListStore *parts;
+	/* A wide list shows the album in a column of its own, and a narrow one after the artist */
+	gboolean has_album_column;
 } SongListSetup;
 
 /* A row's small round button, named apart from buttons so the theme's many button rules are not matched again
@@ -268,6 +270,23 @@ static GtkWidget *create_label(const char *style) {
 }
 
 
+/* The artist line holds the album as well whenever the album has no column of its own */
+static void show_song_words(SongRow *row) {
+	SongListSetup *setup = g_object_get_data(G_OBJECT(row->list), "setup");
+	CrimsonSong *song = gtk_list_item_get_item(row->item);
+	gboolean has_album = *song->album != '\0';
+	gboolean is_album_apart = setup->has_album_column && has_album;
+	g_autofree char *details = has_album && !is_album_apart
+		? g_strdup_printf("%s" TEXT_SEPARATOR "%s", song->artist, song->album) : g_strdup(song->artist);
+	gtk_label_set_text(GTK_LABEL(row->details), details);
+	gtk_widget_set_visible(row->details, *details != '\0');
+	gtk_label_set_text(GTK_LABEL(row->album), is_album_apart ? song->album : "");
+	gtk_widget_set_visible(row->album, setup->has_album_column);
+	/* Without the album column, the words take all the room the buttons and the length leave */
+	gtk_box_set_homogeneous(GTK_BOX(row->columns), setup->has_album_column);
+}
+
+
 static void open_menu(GtkGestureClick *gesture, int presses, double x, double y, SongRow *row) {
 	SongListSetup *setup = g_object_get_data(G_OBJECT(row->list), "setup");
 	CrimsonSong *song = gtk_list_item_get_item(row->item);
@@ -395,6 +414,10 @@ static void set_up_row(GtkSignalListItemFactory *factory, GtkListItem *item, Gtk
 	gtk_overlay_add_overlay(GTK_OVERLAY(cover), play);
 	gtk_widget_set_valign(cover, GTK_ALIGN_CENTER);
 	gtk_box_append(GTK_BOX(row->box), cover);
+	/* The song's words take one half of the row and the album, the buttons and the length the other, so the album
+	 * column starts in the same place on every row whatever the titles hold and whichever buttons a song has */
+	row->columns = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, SPACING_NORMAL);
+	gtk_widget_set_hexpand(row->columns, TRUE);
 	GtkWidget *labels = gtk_box_new(GTK_ORIENTATION_VERTICAL, SPACING_HAIRLINE);
 	gtk_widget_set_hexpand(labels, TRUE);
 	gtk_widget_set_valign(labels, GTK_ALIGN_CENTER);
@@ -402,26 +425,32 @@ static void set_up_row(GtkSignalListItemFactory *factory, GtkListItem *item, Gtk
 	row->details = create_label("dimmed");
 	gtk_box_append(GTK_BOX(labels), row->title);
 	gtk_box_append(GTK_BOX(labels), row->details);
-	gtk_box_append(GTK_BOX(row->box), labels);
+	gtk_box_append(GTK_BOX(row->columns), labels);
+	GtkWidget *trailing = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, SPACING_NORMAL);
+	row->album = create_label("dimmed");
+	gtk_widget_set_hexpand(row->album, TRUE);
+	gtk_box_append(GTK_BOX(trailing), row->album);
 	row->love = create_row_action("crimson-heart-symbolic", "love-button");
 	g_signal_connect(row->love, "clicked", G_CALLBACK(toggle_love), row);
-	gtk_box_append(GTK_BOX(row->box), row->love);
+	gtk_box_append(GTK_BOX(trailing), row->love);
 	row->like = create_row_action("crimson-like-symbolic", "like-button");
 	g_signal_connect(row->like, "clicked", G_CALLBACK(toggle_like), row);
-	gtk_box_append(GTK_BOX(row->box), row->like);
+	gtk_box_append(GTK_BOX(trailing), row->like);
 	row->dislike = create_row_action("crimson-dislike-symbolic", "like-button");
 	g_signal_connect(row->dislike, "clicked", G_CALLBACK(toggle_dislike), row);
-	gtk_box_append(GTK_BOX(row->box), row->dislike);
-	row->add = create_row_action("list-add-symbolic", NULL);
+	gtk_box_append(GTK_BOX(trailing), row->dislike);
+	row->add = create_row_action("list-add-symbolic", "add-button");
 	gtk_widget_set_tooltip_text(row->add, TEXT_ADD_SUGGESTION);
 	g_signal_connect(row->add, "clicked", G_CALLBACK(add_suggestion), row);
-	gtk_box_append(GTK_BOX(row->box), row->add);
+	gtk_box_append(GTK_BOX(trailing), row->add);
 	row->length = create_label("dimmed");
 	gtk_widget_add_css_class(row->length, "numeric");
 	/* Room for lengths up to 99:59:59, so the hearts beside them line up down the list */
 	gtk_label_set_width_chars(GTK_LABEL(row->length), LENGTH_CHARACTERS);
 	gtk_label_set_xalign(GTK_LABEL(row->length), 1);
-	gtk_box_append(GTK_BOX(row->box), row->length);
+	gtk_box_append(GTK_BOX(trailing), row->length);
+	gtk_box_append(GTK_BOX(row->columns), trailing);
+	gtk_box_append(GTK_BOX(row->box), row->columns);
 	add_row_controllers(row);
 	g_object_set_data_full(G_OBJECT(item), "row", row, g_free);
 	/* Rows open and fold through a revealer, so songs come and go smoothly while the list keeps the row it is anchored
@@ -437,10 +466,7 @@ static void bind_row(GtkSignalListItemFactory *factory, GtkListItem *item, gpoin
 	SongRow *row = g_object_get_data(G_OBJECT(item), "row");
 	CrimsonSong *song = gtk_list_item_get_item(item);
 	gtk_label_set_text(GTK_LABEL(row->title), song->title);
-	g_autofree char *details = *song->album ? g_strdup_printf("%s" TEXT_SEPARATOR "%s", song->artist, song->album)
-		: g_strdup(song->artist);
-	gtk_label_set_text(GTK_LABEL(row->details), details);
-	gtk_widget_set_visible(row->details, *details != '\0');
+	show_song_words(row);
 	gtk_label_set_text(GTK_LABEL(row->length), song->duration);
 	show_artwork(row->artwork, song->artwork);
 	gtk_widget_set_visible(row->add, offers_add(row));
@@ -613,6 +639,19 @@ void set_song_list_extras(GtkWidget *list, const char *title, GListModel *extras
 	guint count = g_list_model_get_n_items(G_LIST_MODEL(setup->parts));
 	gpointer added[] = {extras};
 	g_list_store_splice(setup->parts, 1, count - 1, added, extras ? 1 : 0);
+}
+
+
+void set_song_list_album_column(GtkWidget *list, gboolean has_album_column) {
+	SongListSetup *setup = g_object_get_data(G_OBJECT(list), "setup");
+	if (setup->has_album_column == has_album_column)
+		return;
+	setup->has_album_column = has_album_column;
+	for (guint index = 0; bound_rows && index < bound_rows->len; index++) {
+		SongRow *row = g_ptr_array_index(bound_rows, index);
+		if (row->list == list)
+			show_song_words(row);
+	}
 }
 
 

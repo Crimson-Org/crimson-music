@@ -5,17 +5,24 @@
 #include "pages/lyrics-page.h"
 #include "common/widgets/spacing.h"
 #include "sources/library.h"
+#include "visuals/ambience.h"
+#include "visuals/artwork.h"
 
-#define LYRICS_WIDTH 640
+#define LYRICS_WIDTH 760
 #define PAGE_KEY "lyrics-parts"
 #define START_KEY "lyric-start"
 #define CURRENT_CLASS "current"
 /* The page glides this long to bring the next line to its middle */
 #define FOLLOW_MILLISECONDS 450
+/* The cover behind the words is only read for its colours, so a small one does */
+#define BACKDROP_COVER_SIZE 64
 
 /* The widgets a lyrics page fills in, and the line lit now */
 typedef struct {
 	GtkWidget *title, *artist, *lines, *source, *empty, *stack, *scroller;
+	/* The words sit on a blur of the song's cover, as every page heading does, from a cover that is never shown
+	 * itself */
+	GtkWidget *backdrop, *cover;
 	GtkWidget *current;
 	LyricChosen chosen;
 	gpointer data;
@@ -39,13 +46,27 @@ static GtkWidget *create_label(const char *style) {
 }
 
 
+static void free_parts(gpointer data) {
+	LyricsParts *parts = data;
+	g_clear_object(&parts->cover);
+	g_free(parts);
+}
+
+
+static void follow_cover(GtkWidget *cover, GParamSpec *spec, LyricsParts *parts) {
+	set_ambience_texture(parts->backdrop, get_cover_texture(cover));
+}
+
+
 GtkWidget *create_lyrics_page(LyricChosen chosen, gpointer data) {
 	LyricsParts *parts = g_new0(LyricsParts, 1);
 	parts->chosen = chosen;
 	parts->data = data;
 	GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, SPACING_SMALL);
 	gtk_widget_add_css_class(box, "lyrics");
-	parts->title = create_label("title-1");
+	/* The words lead the page, while the song they belong to stays a quiet line above them, as the player names it
+	 * already */
+	parts->title = create_label("heading");
 	parts->artist = create_label("dimmed");
 	parts->lines = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
 	gtk_widget_add_css_class(parts->lines, "lyric-lines");
@@ -69,9 +90,12 @@ GtkWidget *create_lyrics_page(LyricChosen chosen, gpointer data) {
 	gtk_stack_set_transition_type(GTK_STACK(parts->stack), GTK_STACK_TRANSITION_TYPE_CROSSFADE);
 	gtk_stack_add_named(GTK_STACK(parts->stack), parts->scroller, "lyrics");
 	gtk_stack_add_named(GTK_STACK(parts->stack), parts->empty, "empty");
-	gtk_widget_add_css_class(parts->stack, "view");
-	g_object_set_data_full(G_OBJECT(parts->stack), PAGE_KEY, parts, g_free);
-	return parts->stack;
+	parts->backdrop = create_ambience(parts->stack);
+	gtk_widget_add_css_class(parts->backdrop, "lyrics-backdrop");
+	parts->cover = g_object_ref_sink(create_cover(BACKDROP_COVER_SIZE));
+	g_signal_connect(parts->cover, "notify::texture", G_CALLBACK(follow_cover), parts);
+	g_object_set_data_full(G_OBJECT(parts->backdrop), PAGE_KEY, parts, free_parts);
+	return parts->backdrop;
 }
 
 
@@ -120,9 +144,10 @@ static void fill_lines(LyricsParts *parts, GPtrArray *lines, const char *text) {
 }
 
 
-void show_lyrics(GtkWidget *page, const char *title, const char *artist, const char *text, const char *source,
-	GPtrArray *lines) {
+void show_lyrics(GtkWidget *page, const LyricsSong *song, const char *text, const char *source, GPtrArray *lines) {
 	LyricsParts *parts = g_object_get_data(G_OBJECT(page), PAGE_KEY);
+	const char *title = song->title, *artist = song->artist;
+	show_artwork(parts->cover, song->artwork);
 	gboolean is_timed = lines && lines->len > 0;
 	gtk_label_set_text(GTK_LABEL(parts->title), title ? title : "");
 	gtk_label_set_text(GTK_LABEL(parts->artist), artist ? artist : "");

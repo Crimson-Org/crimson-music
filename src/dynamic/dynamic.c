@@ -231,3 +231,16 @@ GPtrArray *filter_dynamic_songs(GListModel *pool, const DynamicRules *rules) {
 	}
 	return songs;
 }
+
+
+char *format_tag(const char *tag) {
+	g_autofree char *lower = g_utf8_strdown(tag, -1);
+	GString *result = g_string_new(NULL);
+	gboolean is_start = TRUE;
+	for (const char *letter = lower; *letter; letter = g_utf8_next_char(letter)) {
+		gunichar character = g_utf8_get_char(letter);
+		g_string_append_unichar(result, is_start ? g_unichar_totitle(character) : character);
+		is_start = !g_unichar_isalnum(character);
+	}
+	return g_string_free(result, FALSE);
+}

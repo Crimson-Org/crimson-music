@@ -36,6 +36,11 @@
 #define LASTFM_LIBRARY_PATH "/library/music/"
 
 #define ARTIST_PREFIX "UC"
+/* The sidebar's class while a page opened from it covers the page its lit row stands for */
+#define BENEATH_CLASS "beneath"
+/* The class of the item a right click menu is about while the menu is open, and the node name of list rows */
+#define MENU_TARGET_CLASS "menu-target"
+#define MENU_TARGET_NODE "row"
 /* Cards of songs in the listener's playlists carry the playlist and song ids after this, split by a newline */
 #define LIBRARY_PREFIX "library:"
 /* Cards of songs played lately carry the song id after this */
@@ -393,7 +398,7 @@ static void fill_similar(Window *window, JSCValue *message, gboolean is_artists)
 	if (is_artists) {
 		g_autoptr(JSCValue) array = jsc_value_object_get_property(message, "artists");
 		g_autoptr(GPtrArray) cards = read_cards(array);
-		add_song_page_card_grid(page, cards, FALSE);
+		add_song_page_card_grid(page, cards, TRUE);
 		g_autoptr(GListModel) none = G_LIST_MODEL(g_list_store_new(CRIMSON_TYPE_SONG));
 		set_song_page_songs(page, none, FALSE, TRUE);
 		make_artists_collage(window, window->similar_tag, cards);
@@ -413,10 +418,12 @@ static void fill_search(Window *window, JSCValue *message) {
 	for (guint index = 0; index < window->online_results->len; index++)
 		remove_song_page_cards(page, g_ptr_array_index(window->online_results, index));
 	g_ptr_array_set_size(window->online_results, 0);
+	/* Artists show round, as people do everywhere else, and albums square */
 	const char *names[] = {"artists", "albums"};
 	const char *titles[] = {TEXT_ARTISTS, TEXT_ALBUMS};
+	const gboolean rounds[] = {TRUE, FALSE};
 	for (guint index = 0; index < G_N_ELEMENTS(names); index++) {
-		GtkWidget *section = add_cards(page, message, names[index], titles[index], FALSE);
+		GtkWidget *section = add_cards(page, message, names[index], titles[index], rounds[index]);
 		if (section)
 			g_ptr_array_add(window->online_results, section);
 	}
@@ -986,6 +993,33 @@ void receive_answer(const char *type, JSCValue *message, gpointer data) {
 /* Right click menus ======================================================= */
 
 
+/* The row or card a menu is about, found from the clicked widget, or NULL for a menu about no item */
+static GtkWidget *find_menu_target(GtkWidget *widget, double y) {
+	if (GTK_IS_LIST_BOX(widget))
+		return GTK_WIDGET(gtk_list_box_get_row_at_y(GTK_LIST_BOX(widget), (int)y));
+	for (GtkWidget *ancestor = widget; ancestor; ancestor = gtk_widget_get_parent(ancestor)) {
+		if (g_str_equal(gtk_widget_get_css_name(ancestor), MENU_TARGET_NODE))
+			return ancestor;
+	}
+	return gtk_widget_has_css_class(widget, "card-button") ? widget : NULL;
+}
+
+
+static void unmark_menu_target(GtkPopover *popover, GtkWidget *target) {
+	gtk_widget_remove_css_class(target, MENU_TARGET_CLASS);
+}
+
+
+/* The item stays marked while its menu is open, since the menu opens over it and the selection may be another */
+static void mark_menu_target(GtkWidget *popover, GtkWidget *widget, double y) {
+	GtkWidget *target = find_menu_target(widget, y);
+	if (!target)
+		return;
+	gtk_widget_add_css_class(target, MENU_TARGET_CLASS);
+	g_signal_connect_object(popover, "closed", G_CALLBACK(unmark_menu_target), target, 0);
+}
+
+
 /* Menus open from an invisible menu button moved to the click, since only a menu button gives its popover the
  * height it needs, and clicks in the menu then never reach the row underneath.
  * Submenus open beside the menu as on other desktops, rather than sliding over it */
@@ -1001,6 +1035,7 @@ static void show_menu(Window *window, GMenuModel *menu, GtkWidget *row, double x
 	gtk_popover_set_position(GTK_POPOVER(popover), GTK_POS_BOTTOM);
 	gtk_widget_set_halign(popover, GTK_ALIGN_START);
 	gtk_popover_set_pointing_to(GTK_POPOVER(popover), &(GdkRectangle){0, 0, 1, 1});
+	mark_menu_target(popover, row, y);
 	gtk_menu_button_set_popover(GTK_MENU_BUTTON(anchor), popover);
 	gtk_menu_button_popup(GTK_MENU_BUTTON(anchor));
 }
@@ -1113,41 +1148,62 @@ static void append_song_artists(GMenu *menu, CrimsonSong *song, const char *show
 }
 
 
-static GMenu *create_song_menu(Window *window, CrimsonSong *song) {
-	g_set_object(&window->menu_song, song);
-	GMenu *menu = g_menu_new();
+/* The ways to play the song soon, which the playing song itself has none of */
+static GMenu *create_queue_section(Window *window, CrimsonSong *song) {
+	GMenu *section = g_menu_new();
 	/* With songs already queued, adding to the end of the queue comes first and playing next follows it */
 	if (g_strcmp0(song->id, window->current_video) != 0 && is_upcoming_queued(window->queue, 1))
-		g_menu_append(menu, TEXT_ADD_TO_QUEUE, "win.add-to-queue");
+		g_menu_append(section, TEXT_ADD_TO_QUEUE, "win.add-to-queue");
 	if (g_strcmp0(song->id, window->current_video) != 0)
-		g_menu_append(menu, TEXT_PLAY_NEXT, "win.play-next");
+		g_menu_append(section, TEXT_PLAY_NEXT, "win.play-next");
+	return section;
+}
+
+
+/* The places the song leads to, its artist and album first and then music like it */
+static GMenu *create_going_section(Window *window, CrimsonSong *song) {
+	GMenu *section = g_menu_new();
 	/* The page on screen is not offered again, so an album's songs only lead on to their artist */
 	AdwNavigationPage *page = adw_navigation_view_get_visible_page(ADW_NAVIGATION_VIEW(window->navigation));
 	const char *shown = page ? adw_navigation_page_get_tag(page) : NULL;
-	append_song_artists(menu, song, shown);
+	append_song_artists(section, song, shown);
 	if (*song->album_id && g_strcmp0(shown, song->album_id) != 0)
-		append_target(menu, TEXT_GO_TO_ALBUM, "win.open-card", song->album_id);
+		append_target(section, TEXT_GO_TO_ALBUM, "win.open-card", song->album_id);
 	else if (!*song->album_id && !is_local_song(song->id))
-		append_target(menu, TEXT_GO_TO_ALBUM, "win.find-album", song->id);
-	if (is_local_song(song->id))
-		append_target(menu, TEXT_OPEN_LOCATION, "win.open-location", song->id);
-	else
-		append_target(menu, TEXT_SHARE, "win.share", song->id);
+		append_target(section, TEXT_GO_TO_ALBUM, "win.find-album", song->id);
 	/* A local file names its artist and album only as text, so they are found by searching for them */
 	/* Quotes keep the artist's name together, which finds that artist better than the loose words */
 	if (is_local_song(song->id) && *song->artist) {
 		g_autofree char *artist = g_strdup_printf("\"%s\"", song->artist);
-		append_target(menu, TEXT_SEARCH_FOR_ARTIST, "win.search-for", artist);
+		append_target(section, TEXT_SEARCH_FOR_ARTIST, "win.search-for", artist);
 	}
 	if (is_local_song(song->id) && *song->album) {
 		g_autofree char *album = *song->artist ? g_strdup_printf("%s %s", song->album, song->artist)
 			: g_strdup(song->album);
-		append_target(menu, TEXT_SEARCH_FOR_ALBUM, "win.search-for", album);
+		append_target(section, TEXT_SEARCH_FOR_ALBUM, "win.search-for", album);
 	}
-	g_menu_append(menu, TEXT_SIMILAR_SONGS, "win.similar-songs");
+	g_menu_append(section, TEXT_SIMILAR_SONGS, "win.similar-songs");
 	g_autofree char *artist = get_song_lastfm_artist(song);
 	g_autofree char *artist_id = get_song_artist_id(song);
-	append_similar_artists(menu, artist_id, artist);
+	append_similar_artists(section, artist_id, artist);
+	return section;
+}
+
+
+/* Adds the section unless it came out empty, which would leave a stray line in the menu */
+static void append_section(GMenu *menu, GMenu *section) {
+	if (g_menu_model_get_n_items(G_MENU_MODEL(section)))
+		g_menu_append_section(menu, NULL, G_MENU_MODEL(section));
+	g_object_unref(section);
+}
+
+
+static GMenu *create_song_menu(Window *window, CrimsonSong *song) {
+	g_set_object(&window->menu_song, song);
+	GMenu *menu = g_menu_new();
+	append_section(menu, create_queue_section(window, song));
+	append_section(menu, create_going_section(window, song));
+	g_autoptr(GMenu) keeping = g_menu_new();
 	g_autoptr(GMenu) playlists = g_menu_new();
 	for (guint index = 0; index < g_list_model_get_n_items(G_LIST_MODEL(window->playlists)); index++) {
 		g_autoptr(CrimsonPlaylist) playlist = g_list_model_get_item(G_LIST_MODEL(window->playlists), index);
@@ -1159,9 +1215,9 @@ static GMenu *create_song_menu(Window *window, CrimsonSong *song) {
 	g_autoptr(GMenu) making = g_menu_new();
 	g_menu_append(making, TEXT_NEW_LOCAL_PLAYLIST_WITH_SONG, "win.new-local-playlist-with-song");
 	g_menu_append_section(playlists, NULL, G_MENU_MODEL(making));
-	g_menu_append_submenu(menu, TEXT_ADD_TO_PLAYLIST, G_MENU_MODEL(playlists));
+	g_menu_append_submenu(keeping, TEXT_ADD_TO_PLAYLIST, G_MENU_MODEL(playlists));
 	if (is_showing_playlist(window) && window->shown && window->shown->is_editable && !is_extra_song(song))
-		g_menu_append(menu, TEXT_REMOVE_FROM_PLAYLIST, "win.remove-from-playlist");
+		g_menu_append(keeping, TEXT_REMOVE_FROM_PLAYLIST, "win.remove-from-playlist");
 	/* A local song found in several formats lets the listener pick which one plays, the current one marked */
 	g_autoptr(GPtrArray) versions = is_local_song(song->id) ? list_local_versions(song->id) : NULL;
 	if (versions && versions->len > 1) {
@@ -1173,9 +1229,14 @@ static GMenu *create_song_menu(Window *window, CrimsonSong *song) {
 		}
 		g_simple_action_set_state(window->version_action, g_variant_new_string(song->id));
 		g_autofree char *title = g_strdup_printf(TEXT_VERSIONS, versions->len);
-		g_menu_append_submenu(menu, title, G_MENU_MODEL(choices));
+		g_menu_append_submenu(keeping, title, G_MENU_MODEL(choices));
 	}
+	g_menu_append_section(menu, NULL, G_MENU_MODEL(keeping));
 	g_autoptr(GMenu) information = g_menu_new();
+	if (is_local_song(song->id))
+		append_target(information, TEXT_OPEN_LOCATION, "win.open-location", song->id);
+	else
+		append_target(information, TEXT_SHARE, "win.share", song->id);
 	append_song_lastfm_menu(information, song);
 	g_menu_append(information, TEXT_INFORMATION, "win.song-information");
 	g_menu_append_section(menu, NULL, G_MENU_MODEL(information));
@@ -1223,15 +1284,14 @@ void open_playlist_menu(Window *window, CrimsonPlaylist *playlist, GtkWidget *ro
 	g_set_object(&window->menu_playlist, playlist);
 	g_autoptr(GMenu) menu = g_menu_new();
 	g_menu_append(menu, TEXT_PLAY, "win.play-playlist");
-	g_menu_append(menu, TEXT_RANDOM, "win.play-playlist-random");
-	g_autoptr(GMenu) editing = g_menu_new();
+	g_menu_append(menu, TEXT_SHUFFLE, "win.play-playlist-random");
+	GMenu *editing = g_menu_new();
 	if (is_own_playlist(playlist)) {
 		g_menu_append(editing, TEXT_RENAME, "win.rename-playlist");
 		g_menu_append(editing, TEXT_DELETE, "win.delete-playlist");
 	}
-	g_menu_append(editing, TEXT_NEW_PLAYLIST, "win.new-playlist");
-	g_menu_append(editing, TEXT_NEW_LOCAL_PLAYLIST, "win.new-local-playlist");
-	g_menu_append_section(menu, NULL, G_MENU_MODEL(editing));
+	append_section(menu, editing);
+	append_section(menu, create_making_section());
 	show_menu(window, G_MENU_MODEL(menu), row, x, y);
 }
 
@@ -1257,11 +1317,17 @@ void open_dynamic_menu(Window *window, const char *id, GtkWidget *widget, double
 }
 
 
+GMenu *create_making_section(void) {
+	GMenu *section = g_menu_new();
+	g_menu_append(section, TEXT_NEW_PLAYLIST, "win.new-playlist");
+	g_menu_append(section, TEXT_NEW_LOCAL_PLAYLIST, "win.new-local-playlist");
+	g_menu_append(section, TEXT_NEW_DYNAMIC, "win.new-dynamic");
+	return section;
+}
+
+
 void open_sidebar_menu(Window *window, GtkWidget *widget, double x, double y) {
-	g_autoptr(GMenu) menu = g_menu_new();
-	g_menu_append(menu, TEXT_NEW_PLAYLIST, "win.new-playlist");
-	g_menu_append(menu, TEXT_NEW_LOCAL_PLAYLIST, "win.new-local-playlist");
-	g_menu_append(menu, TEXT_NEW_DYNAMIC, "win.new-dynamic");
+	g_autoptr(GMenu) menu = create_making_section();
 	show_menu(window, G_MENU_MODEL(menu), widget, x, y);
 }
 
@@ -1852,7 +1918,8 @@ static void ask_delete(GSimpleAction *action, GVariant *parameter, gpointer data
 	if (!window->menu_playlist)
 		return;
 	g_autofree char *heading = g_strdup_printf(TEXT_DELETE_PLAYLIST, window->menu_playlist->title);
-	AdwDialog *dialog = adw_alert_dialog_new(heading, TEXT_DELETE_PLAYLIST_DETAIL);
+	AdwDialog *dialog = adw_alert_dialog_new(heading, is_local_playlist(window->menu_playlist)
+		? TEXT_DELETE_LOCAL_DETAIL : TEXT_DELETE_PLAYLIST_DETAIL);
 	adw_alert_dialog_add_responses(ADW_ALERT_DIALOG(dialog), "cancel", TEXT_CANCEL, "confirm", TEXT_DELETE, NULL);
 	adw_alert_dialog_set_response_appearance(ADW_ALERT_DIALOG(dialog), "confirm", ADW_RESPONSE_DESTRUCTIVE);
 	adw_alert_dialog_set_close_response(ADW_ALERT_DIALOG(dialog), "cancel");
@@ -1939,9 +2006,9 @@ void add_page_actions(Window *window) {
 static void fill_lyrics_page(Window *window) {
 	CrimsonSong *song = get_queue_song(window->queue);
 	gboolean is_current = song && g_strcmp0(window->lyrics_video, song->id) == 0;
-	show_lyrics(window->lyrics_page, song ? song->title : NULL, song ? song->artist : NULL,
-		is_current ? window->lyrics_text : NULL, is_current ? window->lyrics_source : NULL,
-		is_current ? window->lyrics_lines : NULL);
+	LyricsSong shown = {song ? song->title : NULL, song ? song->artist : NULL, song ? song->artwork : NULL};
+	show_lyrics(window->lyrics_page, &shown, is_current ? window->lyrics_text : NULL,
+		is_current ? window->lyrics_source : NULL, is_current ? window->lyrics_lines : NULL);
 	follow_lyrics(window->lyrics_page, window->time);
 }
 
@@ -2319,6 +2386,13 @@ static void notice_visible_page(AdwNavigationView *navigation, GParamSpec *spec,
 		gtk_list_box_unselect_all(GTK_LIST_BOX(window->home_list));
 		select_playlist_row(window, window->state.playlist_id);
 	}
+	/* While an artist, an album or a search is on screen, the lit row in the sidebar is only where it was opened
+	 * from, so the row keeps an outline rather than claiming to be the page shown */
+	gboolean is_sidebar_page = g_strcmp0(tag, PLAYLIST_TAG) == 0 || g_strcmp0(tag, HOME_TAG) == 0;
+	if (is_sidebar_page)
+		gtk_widget_remove_css_class(window->sidebar_stack, BENEATH_CLASS);
+	else
+		gtk_widget_add_css_class(window->sidebar_stack, BENEATH_CLASS);
 	update_back_button(window);
 }
 

@@ -1,3 +1,5 @@
+#include <string.h>
+
 #include <adwaita.h>
 
 #include "lang/en.h"
@@ -8,8 +10,11 @@
 #include "app/settings.h"
 #include "window/window.h"
 
-#define SETTINGS_WIDTH 640
-#define SETTINGS_HEIGHT 520
+#define SETTINGS_WIDTH 720
+#define SETTINGS_HEIGHT 360
+#define FOLDER_ICON "folder-music-symbolic"
+/* How a path inside the home folder starts, as file managers and terminals write it */
+#define HOME_MARK "~"
 
 
 static void change_style(AdwComboRow *row, GParamSpec *spec, gpointer data) {
@@ -32,9 +37,9 @@ static void change_visuals(AdwComboRow *row, GParamSpec *spec, gpointer data) {
 }
 
 
+/* A page's first group goes untitled, since the tab above it already names it */
 static GtkWidget *create_appearance_group(void) {
 	GtkWidget *group = adw_preferences_group_new();
-	adw_preferences_group_set_title(ADW_PREFERENCES_GROUP(group), TEXT_APPEARANCE);
 	static const char *const STYLE_NAMES[] = {TEXT_FOLLOW_SYSTEM, TEXT_LIGHT, TEXT_DARK, NULL};
 	g_autoptr(GtkStringList) styles = gtk_string_list_new(STYLE_NAMES);
 	GtkWidget *style = adw_combo_row_new();
@@ -87,7 +92,6 @@ static void change_suggestions(AdwSwitchRow *row, GParamSpec *spec, gpointer dat
 
 static GtkWidget *create_playback_group(void) {
 	GtkWidget *group = adw_preferences_group_new();
-	adw_preferences_group_set_title(ADW_PREFERENCES_GROUP(group), TEXT_PLAYBACK);
 	add_switch(group, TEXT_RESUME_SONGS, TEXT_RESUME_SONGS_DETAIL, get_settings()->resumes_songs,
 		G_CALLBACK(change_resume));
 	add_switch(group, TEXT_RESTORE_LAST_SONG, TEXT_RESTORE_LAST_SONG_DETAIL, get_settings()->restores_last_song,
@@ -165,7 +169,6 @@ static void change_reminder(AdwSwitchRow *row, GParamSpec *spec, gpointer data) 
 
 static GtkWidget *create_lastfm_group(void) {
 	GtkWidget *group = adw_preferences_group_new();
-	adw_preferences_group_set_title(ADW_PREFERENCES_GROUP(group), TEXT_LASTFM);
 	lastfm_row = adw_action_row_new();
 	adw_preferences_row_set_title(ADW_PREFERENCES_ROW(lastfm_row), TEXT_LASTFM_SCROBBLING);
 	lastfm_button = gtk_button_new();
@@ -239,6 +242,16 @@ static void add_folder(GtkButton *button, gpointer data) {
 }
 
 
+/* A folder in the home folder is shown from there, as a file manager does, so the row says where it is in few words */
+static char *describe_folder(const char *folder) {
+	const char *home = g_get_home_dir();
+	const char *rest = g_str_has_prefix(folder, home) ? folder + strlen(home) : NULL;
+	if (rest && (*rest == '/' || !*rest))
+		return g_strconcat(HOME_MARK, rest, NULL);
+	return g_strdup(folder);
+}
+
+
 static void show_folders(void) {
 	for (guint index = 0; folder_rows && index < folder_rows->len; index++)
 		adw_preferences_group_remove(ADW_PREFERENCES_GROUP(folder_group), g_ptr_array_index(folder_rows, index));
@@ -246,8 +259,12 @@ static void show_folders(void) {
 	folder_rows = g_ptr_array_new();
 	for (char **folder = get_settings()->media_folders; *folder; folder++) {
 		GtkWidget *row = adw_action_row_new();
-		adw_preferences_row_set_title(ADW_PREFERENCES_ROW(row), *folder);
+		g_autofree char *name = g_path_get_basename(*folder);
+		g_autofree char *place = describe_folder(*folder);
+		adw_preferences_row_set_title(ADW_PREFERENCES_ROW(row), name);
+		adw_action_row_set_subtitle(ADW_ACTION_ROW(row), place);
 		adw_preferences_row_set_use_markup(ADW_PREFERENCES_ROW(row), FALSE);
+		adw_action_row_add_prefix(ADW_ACTION_ROW(row), gtk_image_new_from_icon_name(FOLDER_ICON));
 		GtkWidget *remove = gtk_button_new_from_icon_name("user-trash-symbolic");
 		gtk_widget_set_valign(remove, GTK_ALIGN_CENTER);
 		gtk_widget_add_css_class(remove, "flat");

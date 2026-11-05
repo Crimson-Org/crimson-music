@@ -44,6 +44,7 @@ typedef struct {
 /* A square cover that crops its picture to fill, whatever shape the picture has */
 #define PLACEHOLDER_ICON "audio-x-generic-symbolic"
 #define EMBLEM_PREFIX "emblem:"
+#define EMBLEM_CLASS "emblem"
 /* An emblem's symbol takes this share of the cover */
 #define EMBLEM_ICON_SCALE 0.5f
 
@@ -52,7 +53,7 @@ typedef struct {
 #define EMBLEM_LIGHT 0.35f
 #define EMBLEM_SHADE 0.15f
 
-/* A cover drawn as a white symbol on the system's accent colour, darkening toward the bottom right */
+/* A cover drawn as a white symbol on the app's accent colour, darkening toward the bottom right */
 typedef struct {
 	const char *name, *icon;
 } Emblem;
@@ -60,7 +61,8 @@ typedef struct {
 static const Emblem EMBLEMS[] = {
 	{"local-library", "folder-music-symbolic"},
 	{"home", "go-home-symbolic"},
-	{"history", "document-open-recent-symbolic"},
+	/* A clock in every icon theme, where the icon for recent documents is an arrow in some of them */
+	{"history", "emoji-recent-symbolic"},
 };
 #define PLACEHOLDER_SHADE 0.2f
 #define PLACEHOLDER_ICON_SCALE 0.45f
@@ -214,12 +216,14 @@ static void draw_tilted_cover(CrimsonCover *cover, GtkSnapshot *snapshot) {
 }
 
 
+/* The stylesheet gives an emblem the accent as its colour, so it follows the theme like every other accent */
 static void draw_emblem(GtkWidget *widget, GtkSnapshot *snapshot, const Emblem *emblem, float size) {
-	g_autofree GdkRGBA *accent = adw_style_manager_get_accent_color_rgba(adw_style_manager_get_default());
-	GdkRGBA shade = {accent->red * (1 - EMBLEM_SHADE), accent->green * (1 - EMBLEM_SHADE),
-		accent->blue * (1 - EMBLEM_SHADE), 1};
-	GdkRGBA light = {accent->red + (1 - accent->red) * EMBLEM_LIGHT, accent->green + (1 - accent->green) * EMBLEM_LIGHT,
-		accent->blue + (1 - accent->blue) * EMBLEM_LIGHT, 1};
+	GdkRGBA accent;
+	gtk_widget_get_color(widget, &accent);
+	GdkRGBA shade = {accent.red * (1 - EMBLEM_SHADE), accent.green * (1 - EMBLEM_SHADE),
+		accent.blue * (1 - EMBLEM_SHADE), 1};
+	GdkRGBA light = {accent.red + (1 - accent.red) * EMBLEM_LIGHT, accent.green + (1 - accent.green) * EMBLEM_LIGHT,
+		accent.blue + (1 - accent.blue) * EMBLEM_LIGHT, 1};
 	GskColorStop stops[] = {{0, light}, {1, shade}};
 	graphene_rect_t bounds = GRAPHENE_RECT_INIT(0, 0, size, size);
 	GskRoundedRect shape;
@@ -536,11 +540,10 @@ void show_artwork(GtkWidget *widget, const char *address) {
 	CrimsonCover *cover = CRIMSON_COVER(widget);
 	prepare_artwork();
 	cover->emblem = find_emblem(address);
-	if (cover->emblem && !g_object_get_data(G_OBJECT(cover), "follows-accent")) {
-		g_object_set_data(G_OBJECT(cover), "follows-accent", GINT_TO_POINTER(TRUE));
-		g_signal_connect_object(adw_style_manager_get_default(), "notify::accent-color",
-			G_CALLBACK(gtk_widget_queue_draw), cover, G_CONNECT_SWAPPED);
-	}
+	if (cover->emblem)
+		gtk_widget_add_css_class(widget, EMBLEM_CLASS);
+	else
+		gtk_widget_remove_css_class(widget, EMBLEM_CLASS);
 	stop_appearing(cover);
 	if (cover->emblem) {
 		g_object_set_data(G_OBJECT(cover), ADDRESS_KEY, NULL);

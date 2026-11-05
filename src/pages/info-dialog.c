@@ -9,11 +9,12 @@
 #include "common/widgets/spacing.h"
 #include "common/widgets/loading.h"
 #include "common/text/numbers.h"
+#include "app/dialog-layout.h"
 
 #define DIALOG_WIDTH 560
-#define DIALOG_HEIGHT 680
 #define COVER_SIZE 112
-#define FACT_CHARACTERS 18
+/* The facts stand in pairs on the rows of one list, each value kept to one line */
+#define FACT_COLUMNS 2
 /* Longer texts show this many lines until opened, and a text this short shows whole */
 #define TEXT_LINES 3
 #define TITLE_LINES 2
@@ -33,6 +34,8 @@ static CrimsonSong *open_song;
 /* What Last.fm said about the open song and its artist, fetched when the dialog opens */
 static GHashTable *lastfm_details;
 static GtkWidget *open_chips;
+/* The waiting sign in the header bar, shown while more is still being found */
+static GtkWidget *open_waiting;
 /* What the page was filled from, so a change of the listener's tags alone leaves the page and its scrolling be */
 static const SongInfo *shown_info;
 static gboolean was_gathering;
@@ -62,29 +65,27 @@ static GtkWidget *create_wrap(void) {
 }
 
 
-/* One small tile of the facts grid, a dim name over its value */
-static void add_fact(GtkWidget *facts, const char *title, const char *value) {
+/* One fact as libadwaita's property rows show one, its name small above its value */
+static void add_fact(GPtrArray *facts, const char *title, const char *value) {
 	if (!value || !*value)
 		return;
-	GtkWidget *tile = gtk_box_new(GTK_ORIENTATION_VERTICAL, SPACING_HAIRLINE);
-	gtk_widget_add_css_class(tile, "info-fact");
+	GtkWidget *fact = gtk_box_new(GTK_ORIENTATION_VERTICAL, SPACING_HAIRLINE);
+	gtk_widget_add_css_class(fact, "info-fact");
+	gtk_widget_set_tooltip_text(fact, value);
 	GtkWidget *name = gtk_label_new(title);
 	gtk_widget_add_css_class(name, "caption");
 	gtk_widget_add_css_class(name, "dimmed");
 	GtkWidget *text = gtk_label_new(value);
 	gtk_label_set_ellipsize(GTK_LABEL(text), PANGO_ELLIPSIZE_END);
-	gtk_label_set_max_width_chars(GTK_LABEL(text), FACT_CHARACTERS);
-	gtk_widget_set_tooltip_text(text, value);
-	gtk_widget_add_css_class(text, "info-fact-value");
 	for (GtkWidget *label = name; label; label = label == name ? text : NULL) {
 		gtk_label_set_xalign(GTK_LABEL(label), 0);
-		gtk_box_append(GTK_BOX(tile), label);
+		gtk_box_append(GTK_BOX(fact), label);
 	}
-	adw_wrap_box_append(ADW_WRAP_BOX(facts), tile);
+	g_ptr_array_add(facts, fact);
 }
 
 
-static void add_count_fact(GtkWidget *facts, const char *title, const char *digits) {
+static void add_count_fact(GPtrArray *facts, const char *title, const char *digits) {
 	guint64 number = digits ? g_ascii_strtoull(digits, NULL, 10) : 0;
 	g_autofree char *count = number ? format_count(number) : NULL;
 	add_fact(facts, title, count);
@@ -92,16 +93,16 @@ static void add_count_fact(GtkWidget *facts, const char *title, const char *digi
 
 
 /* Chips of words, each kept once across all the chips of the dialog, so a genre several sources name shows once */
-static void add_chips(GtkWidget *wrap, const char *list, const char *style, GHashTable *shown) {
+static void add_chips(GtkWidget *wrap, const char *list, GHashTable *shown) {
 	g_auto(GStrv) words = g_strsplit(list ? list : "", ",", -1);
 	for (char **word = words; *word; word++) {
 		g_autofree char *clean = g_utf8_strdown(g_strstrip(*word), -1);
 		if (!*clean || g_hash_table_contains(shown, clean))
 			continue;
 		g_hash_table_add(shown, g_strdup(clean));
-		GtkWidget *chip = gtk_label_new(g_strstrip(*word));
+		g_autofree char *name = format_tag(g_strstrip(*word));
+		GtkWidget *chip = gtk_label_new(name);
 		gtk_widget_add_css_class(chip, "info-chip");
-		gtk_widget_add_css_class(chip, style);
 		adw_wrap_box_append(ADW_WRAP_BOX(wrap), chip);
 	}
 }
@@ -170,21 +171,33 @@ static const char *get_detail(const char *name) {
 }
 
 
-static void add_pill(GtkWidget *pills, const char *text, const char *style) {
+/* A badge for a state the song is in, such as explicit or loved */
+static void add_badge(GtkWidget *line, const char *text, const char *style) {
+	GtkWidget *badge = gtk_label_new(text);
+	gtk_widget_add_css_class(badge, "info-badge");
+	gtk_widget_add_css_class(badge, style);
+	gtk_widget_set_valign(badge, GTK_ALIGN_CENTER);
+	adw_wrap_box_append(ADW_WRAP_BOX(line), badge);
+}
+
+
+/* One of the short facts under the title, kept apart from the next by a gap rather than a typed separator, which
+ * would read as a minus between two numbers */
+static void add_detail(GtkWidget *line, const char *text) {
 	if (!text || !*text)
 		return;
-	GtkWidget *pill = gtk_label_new(text);
-	gtk_widget_add_css_class(pill, "info-pill");
-	if (style)
-		gtk_widget_add_css_class(pill, style);
-	adw_wrap_box_append(ADW_WRAP_BOX(pills), pill);
+	GtkWidget *detail = gtk_label_new(text);
+	gtk_widget_add_css_class(detail, "dimmed");
+	gtk_widget_add_css_class(detail, "info-detail");
+	adw_wrap_box_append(ADW_WRAP_BOX(line), detail);
 }
 
 
 /* Parts ==================================================================== */
 
 
-/* The cover beside the title, artist and album, with the song's length, year, tempo and key as pills below */
+/* The cover beside the title, artist and album, with the song's length, year, tempo and key in one line below, and
+ * badges for being explicit or loved */
 static void fill_header(GtkWidget *page, const char *id) {
 	GtkWidget *header = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, SPACING_ROOMY);
 	gtk_widget_add_css_class(header, "info-header");
@@ -211,61 +224,88 @@ static void fill_header(GtkWidget *page, const char *id) {
 		gtk_label_set_xalign(GTK_LABEL(label), 0);
 		gtk_box_append(GTK_BOX(words), label);
 	}
-	GtkWidget *pills = create_wrap();
-	gtk_widget_set_margin_top(pills, SPACING_SMALL);
+	GtkWidget *line = create_wrap();
+	adw_wrap_box_set_child_spacing(ADW_WRAP_BOX(line), SPACING_ROOMY);
+	gtk_widget_set_margin_top(line, SPACING_TIGHT);
 	double seconds = get_song_info_number(id, INFO_SECONDS);
 	g_autofree char *length = seconds > 0 ? format_song_length(seconds) : g_strdup(open_song->duration);
-	add_pill(pills, length, NULL);
+	add_detail(line, length);
 	const char *released = get_song_info_value(id, INFO_RELEASED);
 	const char *date = *released ? released : get_song_info_value(id, INFO_UPLOADED);
 	g_autofree char *year = strlen(date) >= YEAR_LENGTH ? g_strndup(date, YEAR_LENGTH) : NULL;
-	add_pill(pills, year, NULL);
+	add_detail(line, year);
 	double bpm = get_song_info_number(id, INFO_BPM);
 	g_autofree char *tempo = bpm > 0 ? g_strdup_printf(TEXT_BPM_FORMAT, (int)bpm) : NULL;
-	add_pill(pills, tempo, NULL);
-	add_pill(pills, get_song_info_value(id, INFO_KEY), NULL);
+	add_detail(line, tempo);
+	add_detail(line, get_song_info_value(id, INFO_KEY));
 	if (get_song_info_number(id, INFO_EXPLICIT) > 0)
-		add_pill(pills, TEXT_EXPLICIT_MARK, "explicit");
+		add_badge(line, TEXT_EXPLICIT_MARK, "explicit");
 	if (g_str_equal(get_detail("loved"), "1"))
-		add_pill(pills, TEXT_LOVED, "loved");
-	gtk_box_append(GTK_BOX(words), pills);
+		add_badge(line, TEXT_LOVED, "loved");
+	gtk_box_append(GTK_BOX(words), line);
 	gtk_box_append(GTK_BOX(header), words);
 	gtk_box_append(GTK_BOX(page), header);
 }
 
 
-/* Everything known that fits in a word or a number, as small tiles side by side */
+/* Everything known that fits in a word or a number, two to a row of one boxed list, so the dialog stays short and
+ * an odd count leaves no hole beside the list */
 static void fill_facts(GtkWidget *page, const char *id) {
-	GtkWidget *facts = create_wrap();
-	adw_wrap_box_set_justify(ADW_WRAP_BOX(facts), ADW_JUSTIFY_FILL);
-	gtk_widget_add_css_class(facts, "info-facts");
+	/* Facts that belong together come one after another, so they tend to share a row: the dates, the release,
+	 * YouTube's own, the sound, then Last.fm's counts last since they arrive last */
+	g_autoptr(GPtrArray) facts = g_ptr_array_new();
 	add_fact(facts, TEXT_RELEASED, get_song_info_value(id, INFO_RELEASED));
+	add_fact(facts, TEXT_UPLOADED, get_song_info_value(id, INFO_UPLOADED));
 	add_fact(facts, TEXT_LABEL, get_song_info_value(id, INFO_LABEL));
+	add_fact(facts, TEXT_ISRC, get_song_info_value(id, INFO_ISRC));
+	add_count_fact(facts, TEXT_VIEWS, get_song_info_value(id, INFO_VIEWS));
+	/* An artist's own channel only repeats the artist under the title */
+	const char *channel = get_song_info_value(id, INFO_CHANNEL);
+	if (g_utf8_collate(channel, open_song->artist) != 0)
+		add_fact(facts, TEXT_CHANNEL, channel);
 	const char *gain = get_song_info_value(id, INFO_GAIN);
 	g_autofree char *loudness = *gain ? g_strdup_printf(TEXT_DECIBEL_FORMAT, gain) : NULL;
 	add_fact(facts, TEXT_LOUDNESS, loudness);
-	add_fact(facts, TEXT_CHANNEL, get_song_info_value(id, INFO_CHANNEL));
-	add_fact(facts, TEXT_UPLOADED, get_song_info_value(id, INFO_UPLOADED));
-	add_count_fact(facts, TEXT_VIEWS, get_song_info_value(id, INFO_VIEWS));
-	add_count_fact(facts, TEXT_YOUR_PLAYS, get_detail("yourPlays"));
-	add_count_fact(facts, TEXT_LISTENERS, get_detail("listeners"));
-	add_count_fact(facts, TEXT_SCROBBLES, get_detail("plays"));
 	g_autoptr(GPtrArray) chapters = get_song_chapters(id);
 	g_autofree char *chapter_count = chapters->len ? g_strdup_printf("%u", chapters->len) : NULL;
 	add_fact(facts, TEXT_CHAPTERS, chapter_count);
-	add_fact(facts, TEXT_ISRC, get_song_info_value(id, INFO_ISRC));
-	if (gtk_widget_get_first_child(facts))
-		gtk_box_append(GTK_BOX(page), facts);
+	add_count_fact(facts, TEXT_LISTENERS, get_detail("listeners"));
+	add_count_fact(facts, TEXT_SCROBBLES, get_detail("plays"));
+	add_count_fact(facts, TEXT_YOUR_PLAYS, get_detail("yourPlays"));
+	if (!facts->len)
+		return;
+	GtkWidget *list = gtk_list_box_new();
+	gtk_list_box_set_selection_mode(GTK_LIST_BOX(list), GTK_SELECTION_NONE);
+	gtk_widget_add_css_class(list, "boxed-list");
+	for (guint index = 0; index < facts->len; index += FACT_COLUMNS) {
+		GtkWidget *pair = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+		gtk_box_set_homogeneous(GTK_BOX(pair), TRUE);
+		for (guint column = 0; column < FACT_COLUMNS; column++) {
+			gboolean has_fact = index + column < facts->len;
+			gtk_box_append(GTK_BOX(pair), has_fact ? g_ptr_array_index(facts, index + column) : adw_bin_new());
+		}
+		gtk_list_box_append(GTK_LIST_BOX(list), pair);
+		gtk_list_box_row_set_activatable(gtk_list_box_get_row_at_index(GTK_LIST_BOX(list), index / FACT_COLUMNS),
+			FALSE);
+	}
+	gtk_box_append(GTK_BOX(page), list);
 }
 
 
-/* Genres from every source as one row of chips, then moods and Last.fm's own tags in their own colours */
+static void add_chip_section(GtkWidget *page, const char *title, GtkWidget *wrap) {
+	if (!gtk_widget_get_first_child(wrap)) {
+		g_object_ref_sink(wrap);
+		g_object_unref(wrap);
+		return;
+	}
+	gtk_box_append(GTK_BOX(add_section(page, title)), wrap);
+}
+
+
+/* The moods under a heading of their own, then genres and tags from every source as one row of chips, right above
+ * the listener's own tags */
 static void fill_tags(GtkWidget *page, const char *id) {
 	g_autoptr(GHashTable) shown = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, NULL);
-	GtkWidget *wrap = create_wrap();
-	add_chips(wrap, get_song_info_value(id, INFO_GENRES), "genre", shown);
-	add_chips(wrap, get_song_info_value(id, INFO_TAGS), "genre", shown);
-	add_chips(wrap, get_song_info_value(id, INFO_STYLES), "genre", shown);
 	g_autoptr(GStrvBuilder) moods = g_strv_builder_new();
 	for (guint index = 0; index < G_N_ELEMENTS(MOOD_NAMES); index++) {
 		if (get_song_info_number(id, INFO_FIRST_MOOD + index) >= MOOD_LIKELY)
@@ -273,12 +313,15 @@ static void fill_tags(GtkWidget *page, const char *id) {
 	}
 	g_auto(GStrv) mood_list = g_strv_builder_end(moods);
 	g_autofree char *mood_text = g_strjoinv(",", mood_list);
-	add_chips(wrap, mood_text, "mood", shown);
-	add_chips(wrap, get_song_info_value(id, INFO_LASTFM), "lastfm", shown);
-	if (!gtk_widget_get_first_child(wrap))
-		return;
-	GtkWidget *section = add_section(page, TEXT_TAGS);
-	gtk_box_append(GTK_BOX(section), wrap);
+	GtkWidget *mood = create_wrap();
+	add_chips(mood, mood_text, shown);
+	add_chip_section(page, TEXT_MOOD, mood);
+	GtkWidget *tags = create_wrap();
+	add_chips(tags, get_song_info_value(id, INFO_GENRES), shown);
+	add_chips(tags, get_song_info_value(id, INFO_TAGS), shown);
+	add_chips(tags, get_song_info_value(id, INFO_STYLES), shown);
+	add_chips(tags, get_song_info_value(id, INFO_LASTFM), shown);
+	add_chip_section(page, TEXT_TAGS, tags);
 }
 
 
@@ -387,6 +430,8 @@ static void fill_chips(void) {
 		g_signal_connect(button, "clicked", G_CALLBACK(remove_tag), NULL);
 		adw_wrap_box_append(ADW_WRAP_BOX(open_chips), button);
 	}
+	/* Without tags the row takes no room, so the field sits as close under its heading as chips do */
+	gtk_widget_set_visible(open_chips, tags && *tags);
 }
 
 
@@ -410,19 +455,14 @@ static void fill_page(void) {
 	GtkWidget *toolbar = adw_dialog_get_child(open_dialog);
 	GtkWidget *old = adw_toolbar_view_get_content(ADW_TOOLBAR_VIEW(toolbar));
 	double place = old ? gtk_adjustment_get_value(gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(old))) : 0;
-	GtkWidget *page = gtk_box_new(GTK_ORIENTATION_VERTICAL, SPACING_WIDE);
+	GtkWidget *page = gtk_box_new(GTK_ORIENTATION_VERTICAL, DIALOG_SECTION_GAP);
 	gtk_widget_add_css_class(page, "info-page");
 	fill_header(page, id);
 	gboolean is_known = get_song_info(id) != NULL;
-	if (is_gathering_song_info(id) || !is_known || (is_lastfm_available() && !lastfm_details)) {
-		GtkWidget *status = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, SPACING_SNUG);
-		gtk_box_append(GTK_BOX(status), adw_spinner_new());
-		GtkWidget *label = gtk_label_new(is_known ? TEXT_GATHERING_AGAIN : TEXT_GATHERING);
-		gtk_widget_add_css_class(label, "dimmed");
-		gtk_box_append(GTK_BOX(status), label);
-		reveal_after_delay(status, NULL, NULL);
-		gtk_box_append(GTK_BOX(page), status);
-	}
+	/* The waiting sign sits in the header bar, so the page below never makes room for it and then closes the gap */
+	gtk_widget_set_visible(open_waiting, is_gathering_song_info(id) || !is_known
+		|| (is_lastfm_available() && !lastfm_details));
+	gtk_widget_set_tooltip_text(open_waiting, is_known ? TEXT_GATHERING_AGAIN : TEXT_GATHERING);
 	fill_facts(page, id);
 	fill_tags(page, id);
 	fill_own_tags(page);
@@ -433,8 +473,11 @@ static void fill_page(void) {
 	shown_info = get_song_info(id);
 	was_gathering = is_gathering_song_info(id);
 	GtkWidget *clamp = adw_clamp_new();
+	/* The page's own padding is its only margin, the same at every width, as in the other dialogs */
+	adw_clamp_set_tightening_threshold(ADW_CLAMP(clamp), adw_clamp_get_maximum_size(ADW_CLAMP(clamp)));
 	adw_clamp_set_child(ADW_CLAMP(clamp), page);
 	GtkWidget *scrolled = gtk_scrolled_window_new();
+	gtk_widget_add_css_class(scrolled, "fading-scroller");
 	gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
 	gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled), clamp);
 	adw_toolbar_view_set_content(ADW_TOOLBAR_VIEW(toolbar), scrolled);
@@ -457,11 +500,16 @@ void show_info_dialog(GtkWidget *parent, CrimsonSong *song) {
 		adw_dialog_force_close(open_dialog);
 	g_set_object(&open_song, song);
 	open_dialog = adw_dialog_new();
-	adw_dialog_set_title(open_dialog, song->title);
+	adw_dialog_set_title(open_dialog, TEXT_INFORMATION);
 	adw_dialog_set_content_width(open_dialog, DIALOG_WIDTH);
-	adw_dialog_set_content_height(open_dialog, DIALOG_HEIGHT);
+	fit_dialog_height(open_dialog, parent, TALL_DIALOG_HEIGHT);
 	GtkWidget *toolbar = adw_toolbar_view_new();
 	GtkWidget *header = adw_header_bar_new();
+	/* The same small spinner as the main window's top bar */
+	open_waiting = adw_spinner_new();
+	gtk_widget_add_css_class(open_waiting, "top-spinner");
+	reveal_after_delay(open_waiting, NULL, NULL);
+	adw_header_bar_pack_start(ADW_HEADER_BAR(header), open_waiting);
 	adw_toolbar_view_add_top_bar(ADW_TOOLBAR_VIEW(toolbar), header);
 	adw_dialog_set_child(open_dialog, toolbar);
 	g_signal_connect(open_dialog, "closed", G_CALLBACK(forget_dialog), NULL);

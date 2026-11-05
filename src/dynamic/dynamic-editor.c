@@ -6,21 +6,24 @@
 #include "sources/song-info.h"
 #include "common/widgets/spacing.h"
 #include "common/text/numbers.h"
+#include "app/dialog-layout.h"
 
 /* Without a search only the most common values of a facet show as chips, along with any already chosen */
 #define CHIPS_SHOWN 30
 #define PREVIEW_SONGS 60
 #define PREVIEW_ARTWORK_SIZE 40
-#define PREVIEW_WIDTH 320
+#define PREVIEW_WIDTH 360
+/* A long title wraps once before it is cut, so most songs show their whole name */
+#define PREVIEW_TITLE_LINES 2
 /* The preview waits this long after a change, so a quick run of clicks fills it once */
 #define PREVIEW_DELAY_MS 120
-/* Below this width the preview moves under the filters */
+/* Below this width the preview moves under the filters, this tall */
 #define NARROW_WIDTH "max-width: 720sp"
+#define NARROW_PREVIEW_HEIGHT 240
 /* A dialog with breakpoints has no minimum size of its own, so it takes the smallest size GNOME phones show */
 #define MINIMUM_WIDTH 360
 #define MINIMUM_HEIGHT 294
-#define EDITOR_WIDTH 980
-#define EDITOR_HEIGHT 720
+#define EDITOR_WIDTH 920
 /* An automatic name lists this many of the chosen values */
 #define NAMED_VALUES 3
 
@@ -73,20 +76,6 @@ static Editor *open_editor;
 /* Chips ==================================================================== */
 
 
-/* Words of a genre start with capitals, so "synth-pop" shows as "Synth-Pop" */
-static char *title_case(const char *text) {
-	g_autofree char *lower = g_utf8_strdown(text, -1);
-	GString *result = g_string_new(NULL);
-	gboolean is_start = TRUE;
-	for (const char *letter = lower; *letter; letter = g_utf8_next_char(letter)) {
-		gunichar character = g_utf8_get_char(letter);
-		g_string_append_unichar(result, is_start ? g_unichar_totitle(character) : character);
-		is_start = !g_unichar_isalnum(character);
-	}
-	return g_string_free(result, FALSE);
-}
-
-
 static char *show_value(Facet facet, const char *value, CrimsonSong *song) {
 	if (facet == FACET_MOOD) {
 		for (guint index = 0; index < G_N_ELEMENTS(MOOD_KEYS); index++) {
@@ -103,7 +92,7 @@ static char *show_value(Facet facet, const char *value, CrimsonSong *song) {
 		}
 	}
 	if (facet == FACET_GENRE)
-		return title_case(value);
+		return format_tag(value);
 	return g_strdup(value);
 }
 
@@ -369,6 +358,9 @@ static GtkWidget *create_preview_row(CrimsonSong *song) {
 	gtk_widget_set_valign(labels, GTK_ALIGN_CENTER);
 	gtk_widget_set_hexpand(labels, TRUE);
 	GtkWidget *title = gtk_label_new(song->title);
+	gtk_label_set_wrap(GTK_LABEL(title), TRUE);
+	gtk_label_set_wrap_mode(GTK_LABEL(title), PANGO_WRAP_WORD_CHAR);
+	gtk_label_set_lines(GTK_LABEL(title), PREVIEW_TITLE_LINES);
 	GtkWidget *artist = gtk_label_new(song->artist);
 	gtk_widget_add_css_class(artist, "dimmed");
 	gtk_widget_add_css_class(artist, "caption");
@@ -379,6 +371,13 @@ static GtkWidget *create_preview_row(CrimsonSong *song) {
 	}
 	gtk_box_append(GTK_BOX(box), labels);
 	return box;
+}
+
+
+/* A line in the preview that is no song, such as how many more there are, which takes no hover or click */
+static void append_preview_note(GtkWidget *preview, GtkWidget *note) {
+	gtk_list_box_append(GTK_LIST_BOX(preview), note);
+	gtk_list_box_row_set_activatable(GTK_LIST_BOX_ROW(gtk_widget_get_parent(note)), FALSE);
 }
 
 
@@ -402,7 +401,7 @@ static void fill_preview(Editor *editor) {
 		gtk_widget_add_css_class(label, "dimmed");
 		gtk_widget_set_margin_top(label, SPACING_SMALL);
 		gtk_widget_set_margin_bottom(label, SPACING_SMALL);
-		gtk_list_box_append(GTK_LIST_BOX(editor->preview), label);
+		append_preview_note(editor->preview, label);
 	}
 	if (!songs->len) {
 		GtkWidget *empty = adw_status_page_new();
@@ -410,7 +409,7 @@ static void fill_preview(Editor *editor) {
 		adw_status_page_set_title(ADW_STATUS_PAGE(empty), TEXT_PREVIEW_EMPTY);
 		adw_status_page_set_description(ADW_STATUS_PAGE(empty), TEXT_PREVIEW_EMPTY_DETAIL);
 		gtk_widget_add_css_class(empty, "compact");
-		gtk_list_box_append(GTK_LIST_BOX(editor->preview), empty);
+		append_preview_note(editor->preview, empty);
 	}
 }
 
@@ -443,9 +442,9 @@ static GtkWidget *create_preview(Editor *editor) {
 	gtk_widget_set_size_request(pane, PREVIEW_WIDTH, -1);
 	GtkWidget *heading = gtk_box_new(GTK_ORIENTATION_VERTICAL, SPACING_TIGHT);
 	gtk_widget_add_css_class(heading, "preview-heading");
+	/* Named as the filters' groups are */
 	GtkWidget *label = gtk_label_new(TEXT_PREVIEW);
-	gtk_widget_add_css_class(label, "caption-heading");
-	gtk_widget_add_css_class(label, "dimmed");
+	gtk_widget_add_css_class(label, "heading");
 	editor->count = gtk_label_new(NULL);
 	gtk_widget_add_css_class(editor->count, "title-2");
 	editor->note = gtk_label_new(NULL);
@@ -463,6 +462,7 @@ static GtkWidget *create_preview(Editor *editor) {
 	gtk_widget_add_css_class(editor->preview, "preview-list");
 	g_signal_connect(editor->preview, "row-activated", G_CALLBACK(open_preview_song), editor);
 	GtkWidget *scrolled = gtk_scrolled_window_new();
+	gtk_widget_add_css_class(scrolled, "fading-scroller");
 	gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
 	gtk_widget_set_vexpand(scrolled, TRUE);
 	gtk_scrolled_window_set_child(GTK_SCROLLED_WINDOW(scrolled), editor->preview);
@@ -536,7 +536,7 @@ static void cancel_editor(GtkButton *button, Editor *editor) {
 
 
 static GtkWidget *create_filters(Editor *editor) {
-	GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, SPACING_LARGE);
+	GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, DIALOG_SECTION_GAP);
 	gtk_widget_add_css_class(box, "filters");
 	GtkWidget *naming = adw_preferences_group_new();
 	editor->name = adw_entry_row_new();
@@ -545,24 +545,17 @@ static GtkWidget *create_filters(Editor *editor) {
 	g_signal_connect(editor->name, "changed", G_CALLBACK(type_name), editor);
 	adw_preferences_group_add(ADW_PREFERENCES_GROUP(naming), editor->name);
 	gtk_box_append(GTK_BOX(box), naming);
-	GtkWidget *help = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, SPACING_SNUG);
-	gtk_widget_add_css_class(help, "filter-help");
-	GtkWidget *icon = gtk_image_new_from_icon_name("dialog-information-symbolic");
-	GtkWidget *text = gtk_label_new(TEXT_FILTER_HELP);
-	gtk_label_set_wrap(GTK_LABEL(text), TRUE);
-	gtk_label_set_xalign(GTK_LABEL(text), 0);
-	gtk_widget_set_hexpand(text, TRUE);
-	gtk_box_append(GTK_BOX(help), icon);
-	gtk_box_append(GTK_BOX(help), text);
-	gtk_box_append(GTK_BOX(box), help);
 	gtk_box_append(GTK_BOX(box), create_ranges(editor));
 	for (guint index = 0; index < G_N_ELEMENTS(FACET_ORDER); index++)
 		gtk_box_append(GTK_BOX(box), create_facet(editor, FACET_ORDER[index]));
 	for (int facet = 0; facet < FACET_COUNT; facet++)
 		fill_chips(editor, facet);
 	GtkWidget *clamp = adw_clamp_new();
+	/* The filters' own margin is the only one, the same at every width, as in the other dialogs */
+	adw_clamp_set_tightening_threshold(ADW_CLAMP(clamp), adw_clamp_get_maximum_size(ADW_CLAMP(clamp)));
 	adw_clamp_set_child(ADW_CLAMP(clamp), box);
 	GtkWidget *scrolled = gtk_scrolled_window_new();
+	gtk_widget_add_css_class(scrolled, "fading-scroller");
 	gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
 	gtk_widget_set_hexpand(scrolled, TRUE);
 	gtk_widget_set_vexpand(scrolled, TRUE);
@@ -582,7 +575,7 @@ void show_dynamic_editor(GtkWidget *parent, const DynamicRules *rules, GListMode
 	editor->dialog = adw_dialog_new();
 	adw_dialog_set_title(editor->dialog, rules ? TEXT_EDIT_DYNAMIC : TEXT_NEW_DYNAMIC);
 	adw_dialog_set_content_width(editor->dialog, EDITOR_WIDTH);
-	adw_dialog_set_content_height(editor->dialog, EDITOR_HEIGHT);
+	fit_dialog_height(editor->dialog, parent, TALL_DIALOG_HEIGHT);
 	gtk_widget_set_size_request(GTK_WIDGET(editor->dialog), MINIMUM_WIDTH, MINIMUM_HEIGHT);
 	GtkWidget *header = adw_header_bar_new();
 	adw_header_bar_set_show_end_title_buttons(ADW_HEADER_BAR(header), FALSE);
@@ -595,17 +588,18 @@ void show_dynamic_editor(GtkWidget *parent, const DynamicRules *rules, GListMode
 	g_signal_connect(editor->save, "clicked", G_CALLBACK(save_editor), editor);
 	adw_header_bar_pack_end(ADW_HEADER_BAR(header), editor->save);
 	GtkWidget *content = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+	gtk_widget_add_css_class(content, "editor-content");
 	gtk_box_append(GTK_BOX(content), create_filters(editor));
-	gtk_box_append(GTK_BOX(content), create_preview(editor));
+	GtkWidget *preview = create_preview(editor);
+	gtk_box_append(GTK_BOX(content), preview);
 	GtkWidget *toolbar = adw_toolbar_view_new();
 	adw_toolbar_view_add_top_bar(ADW_TOOLBAR_VIEW(toolbar), header);
 	adw_toolbar_view_set_content(ADW_TOOLBAR_VIEW(toolbar), content);
 	adw_dialog_set_child(editor->dialog, toolbar);
+	/* Narrow, the preview moves under the filters as a short strip, so the filters keep most of the room */
 	AdwBreakpoint *narrow = adw_breakpoint_new(adw_breakpoint_condition_parse(NARROW_WIDTH));
-	GValue vertical = G_VALUE_INIT;
-	g_value_init(&vertical, GTK_TYPE_ORIENTATION);
-	g_value_set_enum(&vertical, GTK_ORIENTATION_VERTICAL);
-	adw_breakpoint_add_setter(narrow, G_OBJECT(content), "orientation", &vertical);
+	adw_breakpoint_add_setters(narrow, G_OBJECT(content), "orientation", GTK_ORIENTATION_VERTICAL,
+		G_OBJECT(preview), "vexpand", FALSE, G_OBJECT(preview), "height-request", NARROW_PREVIEW_HEIGHT, NULL);
 	adw_dialog_add_breakpoint(editor->dialog, narrow);
 	g_signal_connect(editor->dialog, "closed", G_CALLBACK(close_editor), editor);
 	open_editor = editor;

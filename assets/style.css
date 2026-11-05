@@ -1,8 +1,30 @@
-/* Every page's content starts this far in, so a list, a loading page and a page of albums all put the first row in
- * the same place */
 :root {
+	/* Every page's content starts this far in, so a list, a loading page and a page of albums all put the first row
+	 * in the same place */
 	--page-inset: 24px;
 	--row-side: 12px;
+	/* A row of cards fades out over this width where it goes on past the page */
+	--shelf-fade: 72px;
+	/* Controls over a cover or its colours stand on a glass of the page's own colour, dark or light with the style */
+	--glass: alpha(var(--view-bg-color), 0.5);
+	--glass-hover: alpha(var(--view-bg-color), 0.65);
+	--glass-press: alpha(var(--view-bg-color), 0.8);
+	/* A fine outline that keeps a shape in sight without filling it */
+	--rim: inset 0 0 0 1px alpha(currentColor, 0.15);
+	/* Where down a heading its colours start to melt into the page, and how far under it scrolled songs fade */
+	--heading-melt: 45%;
+	--scroll-fade: 32px;
+	/* How tall libadwaita draws a pill button */
+	--pill-height: 44px;
+	/* Buttons over an artist's picture float a little above it */
+	--picture-lift: 0 3px 14px alpha(black, 0.4);
+	/* A chip's words stand in a line as tall as libadwaita's buttons, so chips that are buttons and chips that are
+	 * only words have one height */
+	--chip-line: 24px;
+	/* Every dialog's content starts this far from its sides and this far below its header */
+	--dialog-inset: var(--spacing-large);
+	--dialog-top: var(--spacing-wide);
+	--dialog-fade: 48px;
 }
 
 @keyframes slide-in {
@@ -98,7 +120,19 @@ row:hover > revealer > .song.playing .playing-icon,
 }
 
 .player-bar {
-	padding: var(--spacing-compact) var(--spacing-roomy) var(--spacing-small);
+	padding: var(--spacing-compact) var(--spacing-roomy);
+}
+
+/* The position under the controls is a slim line with a small knob, close under the buttons it belongs to */
+.player-bar scale {
+	min-height: 4px;
+	padding: var(--spacing-small) var(--spacing-tight);
+}
+
+.player-bar scale > trough > slider {
+	min-width: 14px;
+	min-height: 14px;
+	margin: -5px;
 }
 
 /* Every control is a true circle of the same size, and the inner button of the volume and chapters follows */
@@ -178,12 +212,26 @@ headerbar.title-bar {
 	box-shadow: none;
 }
 
+/* The heading's colours melt into the page at its foot, and songs scrolled up fade into the page there, so nothing
+ * is cut at a hard edge */
 .page-veil {
-	border-bottom: 1px solid var(--border-color);
+	background-image: linear-gradient(to bottom, transparent var(--heading-melt), var(--view-bg-color));
+}
+
+.page-scroller > undershoot.top {
+	background-image: linear-gradient(to bottom, var(--view-bg-color), transparent var(--scroll-fade));
+	box-shadow: none;
 }
 
 .page-heading {
-	padding: 32px var(--spacing-large) var(--spacing-large);
+	padding: var(--spacing-large);
+}
+
+/* The heading's search is a circle as tall as the pills beside it */
+.page-heading button.circular {
+	min-width: var(--pill-height);
+	min-height: var(--pill-height);
+	padding: 0;
 }
 
 .page-body {
@@ -246,6 +294,13 @@ headerbar.title-bar {
 	margin: 0 calc(var(--row-side) - var(--page-inset));
 }
 
+/* The item a right click menu is about stays marked while the menu covers it, apart from the selection */
+row.menu-target,
+.card-button.menu-target {
+	background-color: alpha(currentColor, 0.08);
+	box-shadow: inset 0 0 0 1px alpha(currentColor, 0.2);
+}
+
 /* The invisible button right click menus open from takes no room */
 .menu-anchor,
 .menu-anchor > button {
@@ -257,6 +312,25 @@ headerbar.title-bar {
 /* Room under the cards for the sideways scrollbar, which would otherwise cover their text */
 .card-row {
 	padding-bottom: 14px;
+}
+
+/* A row of cards that goes on past the column fades out at that edge, so it reads as a row to scroll rather than
+ * one cut off */
+/* A card's picture lines up with the heading above it, its padding reaching past the column as a song row's does */
+.card-shelf {
+	margin-left: calc(-1 * var(--spacing-small));
+}
+
+.card-grid {
+	margin: 0 calc(-1 * var(--spacing-small));
+}
+
+.card-shelf > undershoot.right {
+	background-image: linear-gradient(to left, var(--view-bg-color), transparent var(--shelf-fade));
+}
+
+.card-shelf > undershoot.left {
+	background-image: linear-gradient(to right, var(--view-bg-color), transparent var(--shelf-fade));
 }
 
 .link-label:hover {
@@ -334,6 +408,17 @@ row:hover > revealer > .song .love-button,
 	color: var(--accent-color);
 }
 
+/* A suggestion's + stays in sight, as the way to keep the song, but quiet until the pointer comes to its row */
+.song .add-button {
+	opacity: 0.5;
+	transition: opacity 150ms ease-out;
+}
+
+row:hover > revealer > .song .add-button,
+.song .add-button:focus-visible {
+	opacity: 1;
+}
+
 /* In Liked Music every song is liked, so the hearts only show under the pointer */
 .song-list.quiet-likes row:not(:hover) > revealer > .song .like-button.liked {
 	opacity: 0;
@@ -379,6 +464,11 @@ row:hover > revealer > .song .love-button,
 	padding-top: 0;
 }
 
+/* While a page opened from it is on screen, the lit row keeps only a faint shade, as the place the page came from */
+.beneath .navigation-sidebar > row:selected {
+	background-color: alpha(currentColor, 0.04);
+}
+
 .navigation-sidebar row.drop-target {
 	background-color: alpha(var(--accent-bg-color), 0.25);
 }
@@ -388,16 +478,11 @@ row:hover > revealer > .song .love-button,
 	outline: none;
 }
 
-/* Tags the listener gave a song, each removed by a click */
-.tag-chips {
-	padding: var(--spacing-small);
-}
 
-.tag-chip {
-	border-radius: var(--pill-radius);
-	padding: var(--spacing-hairline) var(--spacing-compact);
+/* An emblem cover is drawn in the accent, which reaches the drawing as the cover's colour */
+cover.emblem {
+	color: var(--accent-bg-color);
 }
-
 
 /* Dynamic and local playlists carry a small badge on the corner of their cover */
 .cover-badge {
@@ -410,10 +495,20 @@ row:hover > revealer > .song .love-button,
 	box-shadow: 0 0 0 2px var(--sidebar-bg-color);
 }
 
-/* The editor's chips: plain, included in the accent colour, or left out in red and struck through */
-.filter-chip {
-	border-radius: var(--pill-radius);
+/* The editor's chips: plain, included in the accent colour with a tick, or left out as a struck through outline,
+ * which never looks like a warning beside the red accent */
+/* Every chip of words has one size, whether the editor toggles it, the Information dialog only shows it, or it is
+ * one of the listener's own tags that a click removes */
+.filter-chip,
+.info-chip,
+.tag-chip {
+	min-height: var(--chip-line);
 	padding: var(--spacing-tight) var(--spacing-normal);
+	border-radius: var(--pill-radius);
+}
+
+.filter-chip,
+.tag-chip {
 	font-weight: normal;
 }
 
@@ -429,8 +524,16 @@ row:hover > revealer > .song .love-button,
 }
 
 .filter-chip.excluded {
-	background-color: alpha(var(--destructive-bg-color), 0.25);
-	color: var(--destructive-color);
+	background: none;
+	box-shadow: var(--rim);
+}
+
+.filter-chip.excluded:hover {
+	background-color: alpha(currentColor, 0.07);
+}
+
+.filter-chip.excluded > box {
+	opacity: 0.8;
 }
 
 .filter-chip.excluded label:not(.chip-count) {
@@ -438,13 +541,17 @@ row:hover > revealer > .song .love-button,
 }
 
 .filters {
-	margin: var(--spacing-wide) var(--spacing-normal) var(--spacing-large);
+	margin: var(--dialog-top) var(--dialog-inset) var(--dialog-inset);
 }
 
-.filter-help {
-	padding: var(--spacing-compact) 14px;
-	border-radius: 12px;
-	background-color: alpha(var(--accent-bg-color), 0.12);
+/* The name's selection only shows while the name has the focus, so none is left standing once a filter is clicked */
+.filters row.entry:not(:focus-within) text > selection {
+	background: none;
+	color: inherit;
+}
+
+.preview-list > row {
+	padding: 0;
 }
 
 .preview-pane {
@@ -452,17 +559,24 @@ row:hover > revealer > .song .love-button,
 	border-left: 1px solid var(--border-color);
 }
 
-.preview-heading {
-	padding: var(--spacing-wide) var(--spacing-wide) var(--spacing-normal);
+/* Under the filters, the preview's line runs along its top instead */
+.editor-content.vertical > .preview-pane {
+	border-left: none;
+	border-top: 1px solid var(--border-color);
 }
 
+.preview-heading {
+	padding: var(--dialog-top) var(--dialog-inset) var(--spacing-normal);
+}
+
+/* The covers line up with the heading above them, and the highlight of a row reaches a little past them */
 .preview-list {
 	background: none;
 	padding: 0 var(--spacing-small) var(--spacing-normal);
 }
 
 .preview-song {
-	padding: var(--spacing-tight) var(--spacing-small);
+	padding: var(--spacing-tight) calc(var(--dialog-inset) - var(--spacing-small));
 }
 
 /* The chapter list: a heading, then numbered chapters with their start times, where the one playing shows the
@@ -605,80 +719,84 @@ cover.bone.round {
 .stagger-8.entering { animation-delay: 280ms; }
 .stagger-9.entering { animation-delay: 315ms; }
 
-/* The controls, cover and words of the player keep a soft dark backing, so they stay clear over the moving colours
- * behind them */
+/* The player's controls stand on glass, so they stay clear over the moving colours behind them */
 button.control:not(.suggested-action):not(:checked) > *,
 .control > button > * {
-	background-color: alpha(black, 0.28);
+	background-color: var(--glass);
 }
 
 button.control:not(.suggested-action):not(:checked):hover > *,
 .control > button:hover > * {
-	background-color: alpha(black, 0.4);
+	background-color: var(--glass-hover);
 }
 
+/* The part of the song still to come reads on any colours behind it, light or dark */
 .player-bar scale trough {
-	background-color: alpha(black, 0.35);
+	background-color: alpha(currentColor, 0.2);
 }
 
-/* The Information dialog: a header with the cover, small fact tiles, chips of tags and short texts that open */
+/* The Information dialog: a header with the cover, facts two to a row, chips of tags and short texts that open,
+ * with the same side margin as the editor's filters */
 .info-page {
-	padding: var(--spacing-wide) var(--spacing-wide) var(--spacing-large);
+	padding: var(--dialog-top) var(--dialog-inset) var(--dialog-inset);
 }
 
+/* Section names read as libadwaita's group titles do */
 .info-heading {
 	font-weight: bold;
-	font-size: smaller;
-	opacity: 0.7;
 }
 
-.info-pill {
-	padding: var(--spacing-hairline) var(--spacing-compact);
-	border-radius: var(--pill-radius);
-	background-color: alpha(currentColor, 0.1);
-	font-size: smaller;
+.info-detail {
 	font-feature-settings: "tnum";
 }
 
-.info-pill.explicit {
-	background-color: alpha(currentColor, 0.2);
-	font-weight: bold;
+/* A fact keeps the room of one of libadwaita's property rows */
+.info-fact {
+	padding: var(--spacing-snug) var(--spacing-normal);
 }
 
-.info-pill.loved {
+.info-badge {
+	padding: 0 var(--spacing-small);
+	border-radius: 6px;
+	font-size: smaller;
+	font-weight: bold;
+	background-color: alpha(currentColor, 0.15);
+}
+
+.info-badge.loved {
 	background-color: alpha(#e5484d, 0.2);
 	color: #e5484d;
 }
 
-.info-fact {
-	min-width: 140px;
-	padding: var(--spacing-snug) var(--spacing-normal);
-	border-radius: 10px;
-	background-color: alpha(currentColor, 0.06);
-}
-
-.info-fact-value {
-	font-weight: 600;
-	font-feature-settings: "tnum";
-}
-
+/* Tags here can only be read, so they are outlines, apart from the filled chips the editor toggles */
+/* A tag here has the plain fill of a chip not chosen in the editor */
 .info-chip {
-	padding: var(--spacing-fine) 11px;
-	border-radius: var(--pill-radius);
-	font-size: smaller;
-	background-color: alpha(currentColor, 0.08);
+	background-color: alpha(currentColor, 0.1);
 }
 
-.info-chip.genre {
-	background-color: alpha(var(--accent-bg-color), 0.25);
+/* Content in a dialog or popover fades into the colour behind it at either end while more is beyond, rather than
+ * being cut at the edge, over a reach as tall as a row of chips so a row is never only half there.
+ * libadwaita draws dialogs in the window's colour, keeping its dialog colour for alerts */
+.fading-scroller {
+	--fade-color: var(--window-bg-color);
 }
 
-.info-chip.mood {
-	background-color: alpha(#8a6cf0, 0.22);
+popover .fading-scroller {
+	--fade-color: var(--popover-bg-color);
 }
 
-.info-chip.lastfm {
-	background-color: alpha(#d51007, 0.18);
+.preview-pane .fading-scroller {
+	--fade-color: var(--sidebar-bg-color);
+}
+
+.fading-scroller > undershoot.top {
+	background-image: linear-gradient(to bottom, var(--fade-color), transparent var(--dialog-fade));
+	box-shadow: none;
+}
+
+.fading-scroller > undershoot.bottom {
+	background-image: linear-gradient(to top, var(--fade-color), transparent var(--dialog-fade));
+	box-shadow: none;
 }
 
 .info-text {
@@ -717,6 +835,9 @@ button.control:not(.suggested-action):not(:checked):hover > *,
  * the pointer comes near or their list is open */
 .upcoming {
 	padding: 0 var(--spacing-tight);
+	/* The fan keeps room around its cards for their tilt, which may reach into the bar's edge rather than make the
+	 * whole bar taller */
+	margin: calc(-1 * var(--spacing-compact)) 0;
 }
 
 /* The covers are the control, so the button under them shows no hover or press */
@@ -779,10 +900,20 @@ button.control:not(.suggested-action):not(:checked):hover > *,
 	margin: var(--spacing-snug) var(--spacing-normal);
 }
 
-.chapter-list row:selected,
+/* A selected song is the one a click picked, while in the queue and the chapters selection is only where the
+ * keyboard is, which a plain highlight shows only while the keyboard is in use, never mistaken for the song playing */
 .song-list > row:selected {
 	background-color: alpha(var(--accent-bg-color), 0.25);
 	color: inherit;
+}
+
+.chapter-list row:selected {
+	background: none;
+	color: inherit;
+}
+
+.chapter-list row:selected:focus-visible {
+	background-color: alpha(currentColor, 0.1);
 }
 
 /* One highlight while a song is held over the fan, in place of GTK's own drop outlines */
@@ -916,13 +1047,30 @@ listview.song-list > header {
 	opacity: 0.85;
 }
 
-/* An artist's title and buttons sit over their picture, kept readable by a soft shadow */
+/* An artist's title and buttons sit over their picture, kept readable by a soft shadow in the page's own colour,
+ * dark behind light words and light behind dark ones */
 .page-heading.over-picture .title-1 {
-	text-shadow: 0 1px 12px alpha(black, 0.65), 0 1px 3px alpha(black, 0.5);
+	text-shadow: 0 1px 12px alpha(var(--view-bg-color), 0.65), 0 1px 3px alpha(var(--view-bg-color), 0.5);
 }
 
-.page-heading.over-picture button.pill {
-	box-shadow: 0 3px 14px alpha(black, 0.4);
+.page-heading.over-picture button.suggested-action {
+	box-shadow: var(--picture-lift);
+}
+
+/* Over a picture the other buttons stand on glass, as the player's do, so they never fade into a bright part of it,
+ * and a fine rim keeps their shape on a dark part */
+.page-heading.over-picture button:not(.suggested-action) {
+	background-color: var(--glass);
+	box-shadow: var(--rim), var(--picture-lift);
+}
+
+.page-heading.over-picture button:not(.suggested-action):hover {
+	background-color: var(--glass-hover);
+}
+
+.page-heading.over-picture button:not(.suggested-action):active,
+.page-heading.over-picture button:not(.suggested-action):checked {
+	background-color: var(--glass-press);
 }
 
 .page-about {
@@ -938,8 +1086,13 @@ listview.song-list > header {
 	transition: opacity 400ms ease-out;
 }
 
-.page-heading .title-1.waiting {
+.page-heading .title-1.waiting,
+.page-heading .heading-detail.waiting {
 	opacity: 0;
+}
+
+.page-heading .heading-detail {
+	transition: opacity 400ms ease-out;
 }
 
 .page-heading button.pill {
@@ -962,9 +1115,11 @@ listview.song-list > header {
 	transition: none;
 }
 
-/* The comments panel stands apart from the middle of the window by a line at its left */
+/* The comments panel is a side panel like the playlists, set apart from the middle of the window by a line at its
+ * left */
 .comments {
-	background-color: var(--view-bg-color);
+	background-color: var(--secondary-sidebar-bg-color);
+	color: var(--secondary-sidebar-fg-color);
 	box-shadow: inset 1px 0 var(--border-color);
 }
 
@@ -976,13 +1131,23 @@ listview.song-list > header {
 	padding: var(--spacing-compact) var(--spacing-roomy);
 }
 
+/* A replies button sits close under its own comment, with its words in line with the comment's, and keeps the
+ * next comment at a distance, in the accent as a link rather than bold like a name */
 .reply-button {
-	margin: 0 0 var(--spacing-tight) var(--spacing-compact);
+	margin: calc(-1 * var(--spacing-small)) 0 var(--spacing-normal) 0;
 	font-size: 0.9em;
+	font-weight: normal;
+	color: var(--accent-color);
 }
 
+/* The words cover the page under them, with the page's own colour until the cover's colours arrive */
+.lyrics-backdrop {
+	background-color: var(--view-bg-color);
+}
+
+/* The song's name starts level with the comments heading beside it */
 .lyrics {
-	padding: 48px var(--spacing-large);
+	padding: var(--spacing-normal) var(--spacing-large) 48px;
 }
 
 .lyric-lines {
@@ -991,15 +1156,15 @@ listview.song-list > header {
 
 /* Each timed line is a label of its own, apart by margins, dimmed until it is sung */
 .lyric-line {
-	font-size: 1.4em;
+	font-size: 1.8em;
 	font-weight: bold;
 	margin: var(--spacing-small) 0;
-	opacity: 0.35;
+	opacity: 0.25;
 	transition: opacity 300ms ease-out;
 }
 
 .lyric-line:hover {
-	opacity: 0.6;
+	opacity: 0.5;
 }
 
 .lyric-line.current,

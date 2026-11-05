@@ -187,6 +187,8 @@ void receive_answer(const char *type, JSCValue *message, gpointer data);
 void open_playlist_menu(Window *window, CrimsonPlaylist *playlist, GtkWidget *row, double x, double y);
 /* The menu for the sidebar around the playlists, which makes a new one */
 void open_sidebar_menu(Window *window, GtkWidget *widget, double x, double y);
+/* The ways to make a playlist, one section that every menu offering them shares */
+GMenu *create_making_section(void);
 void open_pin_menu(Window *window, const char *id, GtkWidget *widget, double x, double y);
 void open_dynamic_menu(Window *window, const char *id, GtkWidget *widget, double x, double y);
 

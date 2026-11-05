@@ -15,11 +15,13 @@ typedef struct {
 	void (*add_suggestion)(CrimsonSong *song, gpointer data);
 } SongListEvents;
 
-/* A list of songs with cover, title, artist and length, where one click activates a song */
+/* A list of songs with cover, title, artist, album and length, where one click activates a song */
 GtkWidget *create_song_list(const SongListEvents *events, gpointer data);
 /* Rows can be dragged to new places only in a reorderable list */
 void set_song_list_songs(GtkWidget *list, GListModel *songs, gboolean is_reorderable);
 void set_song_list_reorderable(GtkWidget *list, gboolean is_reorderable);
+/* A wide list gives the album a column of its own between the song and its length */
+void set_song_list_album_column(GtkWidget *list, gboolean has_album_column);
 /* Songs after the list's own under a heading of their own, each with a button that adds it when addable, or none
  * for NULL */
 void set_song_list_extras(GtkWidget *list, const char *title, GListModel *extras, gboolean is_addable);

@@ -7,7 +7,7 @@
 #include "app/state.h"
 #include "common/widgets/loading.h"
 
-#define ARTWORK_SIZE 56
+#define ARTWORK_SIZE 64
 /* Where each artist's name keeps the artist's id and its click */
 #define ARTIST_ID "artist-id"
 #define ARTIST_CLICK "artist-click"
@@ -25,7 +25,7 @@
 #define UPCOMING_COVERS 3
 #define UPCOMING_COVER 46
 #define UPCOMING_STEP 14
-#define UPCOMING_ROW_COVER 44
+#define UPCOMING_ROW_COVER 40
 /* Space around the fan, so tilted and lifted cards are not cut off */
 #define UPCOMING_ROOM 12
 /* The fan keeps this far from the next button */
@@ -38,14 +38,26 @@
 #define TITLE_LINES 2
 /* No chapter is current yet, which differs from every chapter and from none, so the first check always updates */
 #define CHAPTER_UNKNOWN (-2)
-#define CONTROL_SPACING 6
+#define CONTROL_SPACING SPACING_SMALL
+/* The controls and the position under them take this width in the middle of a wide bar, and up to it on a row of
+ * their own */
+#define TRANSPORT_WIDTH 600
+/* Below this width the bar leaves too little room beside the controls for the song and all its buttons, so the
+ * controls take a row of their own */
+#define NARROW_BAR "max-width: 1100sp"
+/* The bar asks for no more than a narrow window's width and no height of its own, and takes the height of the
+ * layout it shows */
+#define NARROW_BAR_MINIMUM 360
 /* The groups of buttons at the right of the bar keep this far apart, so each reads as its own */
-#define GROUP_SPACING 18
+#define GROUP_SPACING SPACING_LARGE
 
 struct PlayerBar {
 	const PlayerBarEvents *events;
 	gpointer data;
 	GtkWidget *root, *ambience, *details, *artwork, *title, *artist, *play_stack, *position, *elapsed, *length;
+	/* The row with the song and the extras, and the controls with the position under them, which sit in that row's
+	 * middle on a wide window and on a row of their own on a narrow one */
+	GtkWidget *row, *transport;
 	/* The songs the fan showed last, to tell how it changed */
 	GPtrArray *fan_ids;
 	GtkWidget *upcoming, *upcoming_covers, *upcoming_queued, *upcoming_queued_heading, *upcoming_list;
@@ -420,6 +432,7 @@ static GtkWidget *create_upcoming(PlayerBar *bar) {
 	gtk_box_append(GTK_BOX(lists), create_queue_heading(TEXT_UP_NEXT));
 	gtk_box_append(GTK_BOX(lists), bar->upcoming_list);
 	GtkWidget *scrolled = gtk_scrolled_window_new();
+	gtk_widget_add_css_class(scrolled, "fading-scroller");
 	gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
 	gtk_scrolled_window_set_propagate_natural_height(GTK_SCROLLED_WINDOW(scrolled), TRUE);
 	gtk_scrolled_window_set_propagate_natural_width(GTK_SCROLLED_WINDOW(scrolled), TRUE);
@@ -449,7 +462,6 @@ static GtkWidget *create_upcoming_row(PlayerBar *bar, CrimsonSong *song, int off
 	GtkWidget *title = gtk_label_new(song->title);
 	GtkWidget *artist = gtk_label_new(song->artist);
 	gtk_widget_add_css_class(artist, "dimmed");
-	gtk_widget_add_css_class(artist, "caption");
 	for (GtkWidget *label = title; label; label = label == title ? artist : NULL) {
 		gtk_label_set_xalign(GTK_LABEL(label), 0);
 		gtk_label_set_ellipsize(GTK_LABEL(label), PANGO_ELLIPSIZE_END);
@@ -575,19 +587,22 @@ static GtkWidget *create_shuffle_button(void) {
 
 static GtkWidget *create_controls(PlayerBar *bar) {
 	GtkWidget *box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, CONTROL_SPACING);
-	/* Both sides of the play button take the same width, so it stays in the middle with Shuffle and the upcoming
-	 * covers on its right */
+	/* Both sides of the play button take the same width, so it stays in the middle with Shuffle on its left and the
+	 * upcoming covers on its right */
 	GtkWidget *before = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, CONTROL_SPACING);
 	GtkWidget *after = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, CONTROL_SPACING);
 	g_autoptr(GtkSizeGroup) sizes = gtk_size_group_new(GTK_SIZE_GROUP_HORIZONTAL);
 	gtk_size_group_add_widget(sizes, before);
 	gtk_size_group_add_widget(sizes, after);
-	GtkWidget *previous = create_action_button("media-skip-backward-symbolic", "win.previous", TEXT_PREVIOUS);
-	/* Previous sits against the play button, and its stretch stays inside its side rather than widening the row */
-	gtk_widget_set_hexpand(previous, TRUE);
-	gtk_widget_set_halign(previous, GTK_ALIGN_END);
+	/* Shuffle and Previous sit against the play button, and their stretch stays inside their side rather than
+	 * widening the row */
+	GtkWidget *shuffle = create_shuffle_button();
+	gtk_widget_set_hexpand(shuffle, TRUE);
+	gtk_widget_set_halign(shuffle, GTK_ALIGN_END);
 	gtk_widget_set_hexpand(before, FALSE);
-	gtk_box_append(GTK_BOX(before), previous);
+	gtk_box_append(GTK_BOX(before), shuffle);
+	gtk_box_append(GTK_BOX(before),
+		create_action_button("media-skip-backward-symbolic", "win.previous", TEXT_PREVIOUS));
 	gtk_box_append(GTK_BOX(box), before);
 	GtkWidget *play = create_action_button("media-playback-start-symbolic", "win.play-pause", TEXT_PLAY_PAUSE);
 	gtk_widget_remove_css_class(play, "flat");
@@ -605,7 +620,6 @@ static GtkWidget *create_controls(PlayerBar *bar) {
 	gtk_button_set_child(GTK_BUTTON(play), bar->play_stack);
 	gtk_box_append(GTK_BOX(box), play);
 	gtk_box_append(GTK_BOX(after), create_action_button("media-skip-forward-symbolic", "win.next", TEXT_NEXT));
-	gtk_box_append(GTK_BOX(after), create_shuffle_button());
 	gtk_box_append(GTK_BOX(after), create_upcoming(bar));
 	gtk_box_append(GTK_BOX(box), after);
 	return box;
@@ -683,6 +697,7 @@ static GtkWidget *create_chapters(PlayerBar *bar) {
 	gtk_list_box_set_selection_mode(GTK_LIST_BOX(bar->chapter_list), GTK_SELECTION_NONE);
 	g_signal_connect(bar->chapter_list, "row-activated", G_CALLBACK(open_chapter), bar);
 	GtkWidget *scrolled = gtk_scrolled_window_new();
+	gtk_widget_add_css_class(scrolled, "fading-scroller");
 	gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scrolled), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
 	gtk_scrolled_window_set_propagate_natural_height(GTK_SCROLLED_WINDOW(scrolled), TRUE);
 	gtk_scrolled_window_set_propagate_natural_width(GTK_SCROLLED_WINDOW(scrolled), TRUE);
@@ -895,6 +910,7 @@ static GtkWidget *create_position(PlayerBar *bar) {
 	for (GtkWidget *label = bar->elapsed; label; label = label == bar->elapsed ? bar->length : NULL) {
 		gtk_widget_add_css_class(label, "numeric");
 		gtk_widget_add_css_class(label, "dimmed");
+		gtk_widget_add_css_class(label, "caption");
 		gtk_label_set_width_chars(GTK_LABEL(label), TIME_CHARACTERS);
 	}
 	gtk_label_set_xalign(GTK_LABEL(bar->elapsed), 1);
@@ -911,24 +927,69 @@ static void follow_cover(GtkWidget *cover, GParamSpec *spec, PlayerBar *bar) {
 }
 
 
+/* A wide bar holds the controls in its middle at their full width, and a narrow one on a row of their own, as wide
+ * as fits */
+static void place_transport(PlayerBar *bar, gboolean is_narrow) {
+	g_object_ref(bar->transport);
+	GtkWidget *parent = gtk_widget_get_parent(bar->transport);
+	if (parent == bar->row)
+		gtk_center_box_set_center_widget(GTK_CENTER_BOX(bar->row), NULL);
+	else if (parent)
+		gtk_box_remove(GTK_BOX(bar->root), bar->transport);
+	if (is_narrow)
+		gtk_box_append(GTK_BOX(bar->root), bar->transport);
+	else
+		gtk_center_box_set_center_widget(GTK_CENTER_BOX(bar->row), bar->transport);
+	gtk_widget_set_size_request(bar->transport, is_narrow ? -1 : TRANSPORT_WIDTH, -1);
+	g_object_unref(bar->transport);
+}
+
+
+static void narrow_bar(PlayerBar *bar) {
+	place_transport(bar, TRUE);
+}
+
+
+static void widen_bar(PlayerBar *bar) {
+	place_transport(bar, FALSE);
+}
+
+
 PlayerBar *create_player_bar(const PlayerBarEvents *events, gpointer data, int volume) {
 	PlayerBar *bar = g_new0(PlayerBar, 1);
 	bar->events = events;
 	bar->data = data;
-	bar->root = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+	bar->root = gtk_box_new(GTK_ORIENTATION_VERTICAL, SPACING_SMALL);
 	gtk_widget_add_css_class(bar->root, "player-bar");
-	GtkWidget *row = gtk_center_box_new();
+	bar->row = gtk_center_box_new();
 	GtkWidget *details = create_song_details(bar);
 	gtk_widget_set_hexpand(details, TRUE);
-	gtk_center_box_set_start_widget(GTK_CENTER_BOX(row), details);
-	gtk_center_box_set_center_widget(GTK_CENTER_BOX(row), create_controls(bar));
+	gtk_center_box_set_start_widget(GTK_CENTER_BOX(bar->row), details);
+	/* The position runs under the controls, so the times read beside the bar they belong to */
+	GtkWidget *transport = gtk_box_new(GTK_ORIENTATION_VERTICAL, SPACING_TIGHT);
+	GtkWidget *controls = create_controls(bar);
+	gtk_widget_set_halign(controls, GTK_ALIGN_CENTER);
+	gtk_box_append(GTK_BOX(transport), controls);
+	gtk_box_append(GTK_BOX(transport), create_position(bar));
+	bar->transport = adw_clamp_new();
+	adw_clamp_set_maximum_size(ADW_CLAMP(bar->transport), TRANSPORT_WIDTH);
+	adw_clamp_set_tightening_threshold(ADW_CLAMP(bar->transport), TRANSPORT_WIDTH);
+	adw_clamp_set_child(ADW_CLAMP(bar->transport), transport);
+	gtk_widget_set_hexpand(bar->transport, FALSE);
 	GtkWidget *extras = create_extras(bar, volume);
 	gtk_widget_set_hexpand(extras, TRUE);
 	gtk_widget_set_halign(extras, GTK_ALIGN_END);
-	gtk_center_box_set_end_widget(GTK_CENTER_BOX(row), extras);
-	gtk_box_append(GTK_BOX(bar->root), row);
-	gtk_box_append(GTK_BOX(bar->root), create_position(bar));
-	bar->ambience = create_ambience(bar->root);
+	gtk_center_box_set_end_widget(GTK_CENTER_BOX(bar->row), extras);
+	gtk_box_append(GTK_BOX(bar->root), bar->row);
+	widen_bar(bar);
+	GtkWidget *room = adw_breakpoint_bin_new();
+	gtk_widget_set_size_request(room, NARROW_BAR_MINIMUM, 1);
+	adw_breakpoint_bin_set_child(ADW_BREAKPOINT_BIN(room), bar->root);
+	AdwBreakpoint *narrow = adw_breakpoint_new(adw_breakpoint_condition_parse(NARROW_BAR));
+	g_signal_connect_swapped(narrow, "apply", G_CALLBACK(narrow_bar), bar);
+	g_signal_connect_swapped(narrow, "unapply", G_CALLBACK(widen_bar), bar);
+	adw_breakpoint_bin_add_breakpoint(ADW_BREAKPOINT_BIN(room), narrow);
+	bar->ambience = create_ambience(room);
 	fade_ambience_edges(bar->ambience);
 	g_signal_connect(bar->artwork, "notify::texture", G_CALLBACK(follow_cover), bar);
 	return bar;
@@ -938,6 +999,7 @@ PlayerBar *create_player_bar(const PlayerBarEvents *events, gpointer data, int v
 GtkWidget *get_player_bar_widget(PlayerBar *bar) {
 	return bar->ambience;
 }
+
 
 
 /* One name of the artist line, as a link to that artist or as the comma between two names */

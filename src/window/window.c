@@ -73,6 +73,9 @@ void update_top_title(Window *window) {
 
 void update_playlist_page(Window *window) {
 	CrimsonPlaylist *playlist = window->shown;
+	/* The suggestions are set before the page counts what it has to show, so the last playlist's suggestions never
+	 * keep an empty playlist from saying it is empty */
+	show_suggestions(window);
 	gboolean is_signed_out = window->is_ready && !window->is_signed_in;
 	if (is_signed_out)
 		set_song_page_empty(window->playlist_page, "system-search-symbolic", TEXT_SEARCH_TITLE, TEXT_SEARCH_DETAIL);
@@ -84,7 +87,6 @@ void update_playlist_page(Window *window) {
 	}
 	set_song_page_songs(window->playlist_page, G_LIST_MODEL(playlist->songs), playlist->is_editable, FALSE);
 	update_song_page(window->playlist_page, playlist->has_songs);
-	show_suggestions(window);
 }
 
 
@@ -569,6 +571,8 @@ static GtkWidget *create_lastfm_panel(Window *window) {
 	gtk_box_append(GTK_BOX(box), buttons);
 	GtkWidget *popover = gtk_popover_new();
 	gtk_popover_set_child(GTK_POPOVER(popover), box);
+	/* The panel hangs from the button's left edge, so it keeps clear of the window's edge beside the button */
+	gtk_widget_set_halign(popover, GTK_ALIGN_START);
 	return popover;
 }
 
@@ -618,6 +622,7 @@ static void fill_lastfm_menu(GtkMenuButton *button, Window *window) {
 	g_menu_append(connection, TEXT_DISCONNECT, "win.disconnect-lastfm");
 	g_menu_append_section(menu, NULL, G_MENU_MODEL(connection));
 	gtk_menu_button_set_menu_model(button, G_MENU_MODEL(menu));
+	gtk_widget_set_halign(GTK_WIDGET(gtk_menu_button_get_popover(button)), GTK_ALIGN_START);
 	g_object_unref(menu);
 }
 
@@ -714,24 +719,30 @@ void update_lastfm_state(void) {
 }
 
 
+/* The ways to make a playlist, the account, then the app itself, in sections as the other Crimson apps' menus */
 static GtkWidget *create_menu_button(void) {
-	g_autoptr(GMenu) menu = g_menu_new();
-	g_menu_append(menu, TEXT_NEW_PLAYLIST, "win.new-playlist");
-	g_menu_append(menu, TEXT_NEW_LOCAL_PLAYLIST, "win.new-local-playlist");
-	g_menu_append(menu, TEXT_NEW_DYNAMIC, "win.new-dynamic");
-	g_menu_append(menu, TEXT_SETTINGS, "app.settings");
+	g_autoptr(GMenu) making = create_making_section();
 	/* Only the one of Sign In and Sign Out that applies shows */
+	g_autoptr(GMenu) account = g_menu_new();
 	const char *const ACCOUNT_ITEMS[][2] = {{TEXT_SIGN_IN, "win.sign-in"}, {TEXT_SIGN_OUT, "win.sign-out"}};
 	for (guint index = 0; index < G_N_ELEMENTS(ACCOUNT_ITEMS); index++) {
 		g_autoptr(GMenuItem) item = g_menu_item_new(ACCOUNT_ITEMS[index][0], ACCOUNT_ITEMS[index][1]);
 		g_menu_item_set_attribute(item, "hidden-when", "s", "action-disabled");
-		g_menu_append_item(menu, item);
+		g_menu_append_item(account, item);
 	}
-	g_menu_append(menu, TEXT_ABOUT, "app.about");
-	g_menu_append(menu, TEXT_QUIT, "app.quit");
+	g_autoptr(GMenu) program = g_menu_new();
+	g_menu_append(program, TEXT_SETTINGS, "app.settings");
+	g_menu_append(program, TEXT_ABOUT, "app.about");
+	g_menu_append(program, TEXT_QUIT, "app.quit");
+	g_autoptr(GMenu) menu = g_menu_new();
+	g_menu_append_section(menu, NULL, G_MENU_MODEL(making));
+	g_menu_append_section(menu, NULL, G_MENU_MODEL(account));
+	g_menu_append_section(menu, NULL, G_MENU_MODEL(program));
 	GtkWidget *button = gtk_menu_button_new();
 	gtk_menu_button_set_icon_name(GTK_MENU_BUTTON(button), "open-menu-symbolic");
 	gtk_menu_button_set_menu_model(GTK_MENU_BUTTON(button), G_MENU_MODEL(menu));
+	/* The menu hangs from the button's right edge, so it keeps clear of the window's edge beside the button */
+	gtk_widget_set_halign(GTK_WIDGET(gtk_menu_button_get_popover(GTK_MENU_BUTTON(button))), GTK_ALIGN_END);
 	gtk_menu_button_set_primary(GTK_MENU_BUTTON(button), TRUE);
 	gtk_widget_set_tooltip_text(button, TEXT_MAIN_MENU);
 	return button;
