@@ -48,7 +48,7 @@
 }
 
 .song-list > row > revealer > .song {
-	padding: 6px var(--row-side);
+	padding: var(--spacing-small) var(--row-side);
 }
 
 /* The playing mark and Play both sit on a song's cover, as a white sign on a dimmed cover */
@@ -98,7 +98,7 @@ row:hover > revealer > .song.playing .playing-icon,
 }
 
 .player-bar {
-	padding: 10px 16px 6px;
+	padding: var(--spacing-compact) var(--spacing-roomy) var(--spacing-small);
 }
 
 /* Every control is a true circle of the same size, and the inner button of the volume and chapters follows */
@@ -107,7 +107,7 @@ row:hover > revealer > .song.playing .playing-icon,
 	min-width: 36px;
 	min-height: 36px;
 	padding: 0;
-	border-radius: 9999px;
+	border-radius: var(--pill-radius);
 }
 
 .play-button {
@@ -137,7 +137,7 @@ button.control > *,
 .control > button > * {
 	min-width: 36px;
 	min-height: 36px;
-	border-radius: 9999px;
+	border-radius: var(--pill-radius);
 	transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1), background-color 150ms ease-out;
 }
 
@@ -183,7 +183,7 @@ headerbar.title-bar {
 }
 
 .page-heading {
-	padding: 32px 24px 24px;
+	padding: 32px var(--spacing-large) var(--spacing-large);
 }
 
 .page-body {
@@ -191,11 +191,11 @@ headerbar.title-bar {
 }
 
 .page-search {
-	margin: 16px 24px 0;
+	margin: var(--spacing-roomy) var(--spacing-large) 0;
 }
 
 .section-heading {
-	margin-top: 6px;
+	margin-top: var(--spacing-small);
 }
 
 .page-heading.entering {
@@ -207,7 +207,7 @@ headerbar.title-bar {
 	min-width: 24px;
 	min-height: 24px;
 	padding: 0;
-	border-radius: 9999px;
+	border-radius: var(--pill-radius);
 	background-color: alpha(currentColor, 0.1);
 }
 
@@ -216,7 +216,7 @@ headerbar.title-bar {
 }
 
 .card-button {
-	padding: 6px;
+	padding: var(--spacing-small);
 	border-radius: 12px;
 }
 
@@ -279,7 +279,7 @@ cover.heading-cover.entering:not(.round) {
 }
 
 .top-spinner {
-	margin: 0 6px;
+	margin: 0 var(--spacing-small);
 	min-width: 18px;
 	min-height: 18px;
 }
@@ -289,7 +289,7 @@ row-action {
 	min-width: 34px;
 	min-height: 34px;
 	padding: 0;
-	border-radius: 9999px;
+	border-radius: var(--pill-radius);
 	transition: background-color 150ms ease-out;
 }
 
@@ -352,20 +352,20 @@ row:hover > revealer > .song .love-button,
 /* Sidebar sections stand apart by a line fading out at both ends */
 .section-gap {
 	min-height: 1px;
-	margin: 8px 18px;
+	margin: var(--spacing-snug) var(--spacing-wide);
 	background-image: linear-gradient(to right, transparent, alpha(currentColor, 0.18), transparent);
 }
 
 .pin-heading .section-gap {
-	margin: 0 6px 6px;
+	margin: 0 var(--spacing-small) var(--spacing-small);
 }
 
 .pin-heading {
-	margin: 12px 12px 0;
+	margin: var(--spacing-normal) var(--spacing-normal) 0;
 }
 
 .pin-heading label {
-	margin-left: 6px;
+	margin-left: var(--spacing-small);
 }
 
 /* A playlist's whole pill highlights while something is held over it, to show it takes the drop, in place of the
@@ -390,21 +390,21 @@ row:hover > revealer > .song .love-button,
 
 /* Tags the listener gave a song, each removed by a click */
 .tag-chips {
-	padding: 6px;
+	padding: var(--spacing-small);
 }
 
 .tag-chip {
-	border-radius: 999px;
-	padding: 2px 10px;
+	border-radius: var(--pill-radius);
+	padding: var(--spacing-hairline) var(--spacing-compact);
 }
 
 
 /* Dynamic and local playlists carry a small badge on the corner of their cover */
 .cover-badge {
 	-gtk-icon-size: 10px;
-	padding: 2px;
+	padding: var(--spacing-hairline);
 	margin: -3px;
-	border-radius: 999px;
+	border-radius: var(--pill-radius);
 	background-color: var(--accent-bg-color);
 	color: var(--accent-fg-color);
 	box-shadow: 0 0 0 2px var(--sidebar-bg-color);
@@ -412,8 +412,8 @@ row:hover > revealer > .song .love-button,
 
 /* The editor's chips: plain, included in the accent colour, or left out in red and struck through */
 .filter-chip {
-	border-radius: 999px;
-	padding: 4px 12px;
+	border-radius: var(--pill-radius);
+	padding: var(--spacing-tight) var(--spacing-normal);
 	font-weight: normal;
 }
 
@@ -438,11 +438,11 @@ row:hover > revealer > .song .love-button,
 }
 
 .filters {
-	margin: 18px 12px 24px;
+	margin: var(--spacing-wide) var(--spacing-normal) var(--spacing-large);
 }
 
 .filter-help {
-	padding: 10px 14px;
+	padding: var(--spacing-compact) 14px;
 	border-radius: 12px;
 	background-color: alpha(var(--accent-bg-color), 0.12);
 }
@@ -453,27 +453,27 @@ row:hover > revealer > .song .love-button,
 }
 
 .preview-heading {
-	padding: 18px 18px 12px;
+	padding: var(--spacing-wide) var(--spacing-wide) var(--spacing-normal);
 }
 
 .preview-list {
 	background: none;
-	padding: 0 6px 12px;
+	padding: 0 var(--spacing-small) var(--spacing-normal);
 }
 
 .preview-song {
-	padding: 4px 6px;
+	padding: var(--spacing-tight) var(--spacing-small);
 }
 
 /* The chapter list: a heading, then numbered chapters with their start times, where the one playing shows the
  * playing icon and the accent colour */
 popover.chapters > contents {
-	padding: 6px 4px 6px 6px;
+	padding: var(--spacing-small) var(--spacing-tight) var(--spacing-small) var(--spacing-small);
 }
 
 .chapter-heading {
 	font-weight: bold;
-	padding: 6px 12px 10px;
+	padding: var(--spacing-small) var(--spacing-normal) var(--spacing-compact);
 }
 
 .chapter-list {
@@ -482,11 +482,11 @@ popover.chapters > contents {
 
 .chapter-list row {
 	border-radius: 8px;
-	margin: 0 6px 2px 0;
+	margin: 0 var(--spacing-small) var(--spacing-hairline) 0;
 }
 
 .chapter {
-	padding: 8px 10px;
+	padding: var(--spacing-snug) var(--spacing-compact);
 }
 
 .chapter-number {
@@ -507,7 +507,7 @@ popover.chapters > contents {
 }
 
 .description {
-	padding: 12px;
+	padding: var(--spacing-normal);
 }
 
 /* Last.fm's own red, so a missing connection is hard to miss, breathing softly while the browser waits */
@@ -521,7 +521,7 @@ popover.chapters > contents {
 }
 
 .lastfm-panel {
-	padding: 6px;
+	padding: var(--spacing-small);
 }
 
 .lastfm-reminder.waiting > button {
@@ -561,11 +561,11 @@ cover.bone {
 }
 
 cover.bone.round {
-	border-radius: 9999px;
+	border-radius: var(--pill-radius);
 }
 
 .bone-row {
-	padding: 6px var(--row-side);
+	padding: var(--spacing-small) var(--row-side);
 }
 
 @keyframes breathe {
@@ -623,7 +623,7 @@ button.control:not(.suggested-action):not(:checked):hover > *,
 
 /* The Information dialog: a header with the cover, small fact tiles, chips of tags and short texts that open */
 .info-page {
-	padding: 18px 18px 24px;
+	padding: var(--spacing-wide) var(--spacing-wide) var(--spacing-large);
 }
 
 .info-heading {
@@ -633,8 +633,8 @@ button.control:not(.suggested-action):not(:checked):hover > *,
 }
 
 .info-pill {
-	padding: 2px 10px;
-	border-radius: 999px;
+	padding: var(--spacing-hairline) var(--spacing-compact);
+	border-radius: var(--pill-radius);
 	background-color: alpha(currentColor, 0.1);
 	font-size: smaller;
 	font-feature-settings: "tnum";
@@ -652,7 +652,7 @@ button.control:not(.suggested-action):not(:checked):hover > *,
 
 .info-fact {
 	min-width: 140px;
-	padding: 8px 12px;
+	padding: var(--spacing-snug) var(--spacing-normal);
 	border-radius: 10px;
 	background-color: alpha(currentColor, 0.06);
 }
@@ -663,8 +663,8 @@ button.control:not(.suggested-action):not(:checked):hover > *,
 }
 
 .info-chip {
-	padding: 3px 11px;
-	border-radius: 999px;
+	padding: var(--spacing-fine) 11px;
+	border-radius: var(--pill-radius);
 	font-size: smaller;
 	background-color: alpha(currentColor, 0.08);
 }
@@ -686,14 +686,14 @@ button.control:not(.suggested-action):not(:checked):hover > *,
 }
 
 .info-more {
-	padding: 2px 6px;
+	padding: var(--spacing-hairline) var(--spacing-small);
 	min-height: 0;
 	font-size: smaller;
 }
 
 .info-link {
-	padding: 4px 14px;
-	border-radius: 999px;
+	padding: var(--spacing-tight) 14px;
+	border-radius: var(--pill-radius);
 	font-size: smaller;
 }
 
@@ -716,7 +716,7 @@ button.control:not(.suggested-action):not(:checked):hover > *,
 /* The upcoming covers fan out like a hand of cards with the next song in front, and spread wider and lift when
  * the pointer comes near or their list is open */
 .upcoming {
-	padding: 0 4px;
+	padding: 0 var(--spacing-tight);
 }
 
 /* The covers are the control, so the button under them shows no hover or press */
@@ -728,7 +728,7 @@ button.control:not(.suggested-action):not(:checked):hover > *,
 }
 
 .upcoming-cover {
-	margin-bottom: 4px;
+	margin-bottom: var(--spacing-tight);
 	border-radius: 5px;
 	box-shadow: 0 2px 6px alpha(black, 0.6);
 	transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1), opacity 220ms ease-out;
@@ -768,15 +768,15 @@ button.control:not(.suggested-action):not(:checked):hover > *,
 .upcoming-count {
 	font-size: 9px;
 	font-weight: bold;
-	padding: 0 4px;
-	border-radius: 999px;
+	padding: 0 var(--spacing-tight);
+	border-radius: var(--pill-radius);
 	background-color: var(--accent-bg-color);
 	color: var(--accent-fg-color);
 	box-shadow: 0 1px 3px alpha(black, 0.5);
 }
 
 .queue-divide {
-	margin: 8px 12px;
+	margin: var(--spacing-snug) var(--spacing-normal);
 }
 
 .chapter-list row:selected,
@@ -876,7 +876,7 @@ listview.song-list > header {
 }
 
 .extras-heading {
-	margin: 18px 12px 6px;
+	margin: var(--spacing-wide) var(--spacing-normal) var(--spacing-small);
 }
 
 /* The playlist on screen glows at its edge while a song held over it can be dropped in, as an outline so the
@@ -893,23 +893,23 @@ listview.song-list > header {
 
 .playlists-spinner {
 	min-height: 24px;
-	margin: 12px;
+	margin: var(--spacing-normal);
 }
 
 /* The signed out row is exactly as tall as the spinner it replaces */
 .sign-in-row {
 	min-height: 48px;
-	padding: 0 12px 0 18px;
+	padding: 0 var(--spacing-normal) 0 var(--spacing-wide);
 }
 
 .sign-in-row > button.small {
-	padding: 2px 12px;
+	padding: var(--spacing-hairline) var(--spacing-normal);
 	min-height: 26px;
 }
 
 /* The Last.fm text beside a heading sits apart from the title, a little softer */
 .page-about {
-	margin-left: 12px;
+	margin-left: var(--spacing-normal);
 }
 
 .page-about > label:first-child {
@@ -969,31 +969,31 @@ listview.song-list > header {
 }
 
 .comments-title {
-	margin: 12px 16px 6px;
+	margin: var(--spacing-normal) var(--spacing-roomy) var(--spacing-small);
 }
 
 .comment {
-	padding: 10px 16px;
+	padding: var(--spacing-compact) var(--spacing-roomy);
 }
 
 .reply-button {
-	margin: 0 0 4px 10px;
+	margin: 0 0 var(--spacing-tight) var(--spacing-compact);
 	font-size: 0.9em;
 }
 
 .lyrics {
-	padding: 48px 24px;
+	padding: 48px var(--spacing-large);
 }
 
 .lyric-lines {
-	margin: 24px 0;
+	margin: var(--spacing-large) 0;
 }
 
 /* Each timed line is a label of its own, apart by margins, dimmed until it is sung */
 .lyric-line {
 	font-size: 1.4em;
 	font-weight: bold;
-	margin: 6px 0;
+	margin: var(--spacing-small) 0;
 	opacity: 0.35;
 	transition: opacity 300ms ease-out;
 }
@@ -1009,5 +1009,5 @@ listview.song-list > header {
 
 /* An empty line between verses keeps them apart without lighting anything */
 .lyric-gap {
-	margin: 6px 0;
+	margin: var(--spacing-small) 0;
 }
