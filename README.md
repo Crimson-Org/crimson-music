@@ -27,14 +27,14 @@
 
 ## Why
 
-The YouTube Music website fills the screen with feeds, shelves and recommendations.\
-Crimson Music shows your playlists in a sidebar and the songs of the one you pick, and keeps recommendations to the Home page.
+Crimson Music shows your playlists in a sidebar and the songs of the one you pick beside them.\
+Recommendations stay on the Home page.
 
 ## About
 
 ### Your library
 
-Your liked songs and playlists, with their covers, appear when the window opens.
+Your liked songs and playlists, with their covers.
 
 ### Search
 
