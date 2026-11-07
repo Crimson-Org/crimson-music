@@ -3,7 +3,8 @@
 </p>
 
 <h1 align="center">Crimson Music</h1>
-<p align="center">A native <a href="https://gnome.pages.gitlab.gnome.org/libadwaita/">libadwaita</a> music player for <a href="https://music.youtube.com">YouTube Music</a> on Linux.</p>
+<p align="center">A <a href="https://music.youtube.com">YouTube Music</a> desktop client for Linux.<br>
+Play your playlists, liked songs and local music in one native app.</p>
 
 <p align="center">
   <a href="https://gtk.org">
@@ -27,27 +28,10 @@
 
 ## Why
 
-Crimson Music plays YouTube Music in a native desktop app, with your account, playlists and liked songs.\
-Recommendations stay on the Home page.
+YouTube Music without the browser.\
+Your account, playlists and liked songs carry over, and recommendations stay on the Home page.
 
 ## About
-
-### Your library
-
-Your liked songs and playlists, with their covers.
-
-### Search
-
-Search your library and YouTube Music as you type, with your own playlists first.\
-Artist and album pages show all their releases.
-
-### Playlists
-
-Create, rename and delete playlists, and drag songs and playlists to reorder them.
-
-### Playing
-
-Play playlists in order or shuffled, while the player bar takes on the colours of the cover.
 
 ### Dynamic playlists
 
