@@ -27,7 +27,7 @@
 
 ## Why
 
-Crimson Music shows your playlists in a sidebar and the songs of the one you pick beside them.\
+Crimson Music plays YouTube Music in a native desktop app, with your account, playlists and liked songs.\
 Recommendations stay on the Home page.
 
 ## About
@@ -48,6 +48,14 @@ Create, rename and delete playlists, and drag songs and playlists to reorder the
 ### Playing
 
 Play playlists in order or shuffled, while the player bar takes on the colours of the cover.
+
+### Dynamic playlists
+
+Dynamic playlists pick songs from your liked and local music by genre, mood, tempo, year and your own tags, and update by themselves.
+
+### Lyrics and comments
+
+Read the lyrics and comments of the playing song, and jump between a video's chapters.
 
 ### No account needed
 
