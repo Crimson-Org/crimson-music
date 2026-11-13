@@ -16,7 +16,6 @@
 #include "visuals/motion.h"
 #include "app/settings-dialog.h"
 #include "app/settings.h"
-#include "app/sign-in.h"
 #include "sources/song-info.h"
 #include "pages/song-list.h"
 #include "pages/song-page.h"
@@ -460,7 +459,7 @@ static void finish_sign_in(gpointer data) {
 
 static void start_sign_in(GSimpleAction *action, GVariant *parameter, gpointer data) {
 	Window *window = data;
-	show_sign_in(GTK_WIDGET(window->window), get_engine_session(window->engine), finish_sign_in, window);
+	show_sign_in(window->engine, GTK_WIDGET(window->window), TEXT_SIGN_IN, finish_sign_in, window);
 }
 
 

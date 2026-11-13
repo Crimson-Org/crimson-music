@@ -1,7 +1,6 @@
 #pragma once
 
-#include <jsc/jsc.h>
-#include <webkit/webkit.h>
+#include "youtube/youtube-page.h"
 
 /* What the YouTube player reports, with times in seconds */
 typedef struct {
@@ -14,10 +13,10 @@ typedef struct {
 
 /* Player states as YouTube numbers them */
 enum {
-	PLAYER_ENDED = 0,
-	PLAYER_PLAYING = 1,
-	PLAYER_PAUSED = 2,
-	PLAYER_BUFFERING = 3,
+	PLAYER_ENDED = YOUTUBE_ENDED,
+	PLAYER_PLAYING = YOUTUBE_PLAYING,
+	PLAYER_PAUSED = YOUTUBE_PAUSED,
+	PLAYER_BUFFERING = YOUTUBE_BUFFERING,
 };
 
 /* Answers from the hidden page, each called on the main thread */
@@ -44,6 +43,8 @@ WebKitNetworkSession *get_engine_session(Engine *engine);
 void start_engine(Engine *engine);
 void reload_engine(Engine *engine);
 void sign_out_engine(Engine *engine);
+/* Shows Google's own sign in page in a dialog and calls done once it hands over to YouTube Music */
+void show_sign_in(Engine *engine, GtkWidget *parent, const char *title, GDestroyNotify done, gpointer data);
 
 void request_library(Engine *engine);
 /* Asks for YouTube Music's Home, its shelves of mixes, playlists, albums and artists and its quick picks */

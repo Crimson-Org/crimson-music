@@ -4,8 +4,6 @@
 		<file>style.css</file>
 		<file>engine.js</file>
 		<file>song-info.js</file>
-		<file>ad-pruner.js</file>
-		<file>blocklist.json</file>
 		<file>icons/scalable/apps/io.github.CrimsonOrg.CrimsonMusic.svg</file>
 		<file>icons/symbolic/apps/io.github.CrimsonOrg.CrimsonMusic-symbolic.svg</file>
 		<file>icons/scalable/actions/crimson-heart-symbolic.svg</file>
