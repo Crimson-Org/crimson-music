@@ -3,6 +3,7 @@
 #include <math.h>
 
 #include "lang/en.h"
+#include "common/text/numbers.h"
 #include "common/app/identity.h"
 #include "sources/local-library.h"
 #include "app/settings.h"
@@ -159,7 +160,7 @@ static CrimsonSong *create_song(const Entry *entry) {
 	g_set_str(&song->album, entry->album);
 	if (entry->seconds > 0) {
 		g_free(song->duration);
-		song->duration = format_song_length(entry->seconds);
+		song->duration = format_play_time(entry->seconds);
 	}
 	/* A file without a picture takes the album cover found online for its artist and title, if there is one */
 	const char *found = *entry->cover ? NULL : get_song_info_value(song->id, INFO_COVER);

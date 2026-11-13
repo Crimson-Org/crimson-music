@@ -228,7 +228,7 @@ static void fill_header(GtkWidget *page, const char *id) {
 	adw_wrap_box_set_child_spacing(ADW_WRAP_BOX(line), SPACING_ROOMY);
 	gtk_widget_set_margin_top(line, SPACING_TIGHT);
 	double seconds = get_song_info_number(id, INFO_SECONDS);
-	g_autofree char *length = seconds > 0 ? format_song_length(seconds) : g_strdup(open_song->duration);
+	g_autofree char *length = seconds > 0 ? format_play_time(seconds) : g_strdup(open_song->duration);
 	add_detail(line, length);
 	const char *released = get_song_info_value(id, INFO_RELEASED);
 	const char *date = *released ? released : get_song_info_value(id, INFO_UPLOADED);

@@ -9,7 +9,8 @@
 /* The page stays this small and fully transparent, so it never shows but still counts as visible */
 #define HIDDEN_SIZE 1
 
-static const YouTubeSite MUSIC_SITE = {MUSIC_ADDRESS, START_ADDRESS, BRIDGE_RESOURCE, SITE_NAME};
+/* The player is on every YouTube Music page */
+static const YouTubeSite MUSIC_SITE = {MUSIC_ADDRESS, START_ADDRESS, BRIDGE_RESOURCE, SITE_NAME, NULL};
 
 struct Engine {
 	const EngineEvents *events;
@@ -118,7 +119,7 @@ void show_sign_in(Engine *engine, GtkWidget *parent, const char *title, GDestroy
 
 
 void play_video(Engine *engine, const char *video_id, int volume, gboolean is_resuming) {
-	play_youtube_video(engine->page, video_id, volume, is_resuming);
+	play_youtube_video(engine->page, video_id, volume, is_resuming ? YOUTUBE_RESUME : 0);
 }
 
 

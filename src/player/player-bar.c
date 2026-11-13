@@ -3,6 +3,7 @@
 #include "visuals/artwork.h"
 #include "visuals/motion.h"
 #include "player/player-bar.h"
+#include "common/text/numbers.h"
 #include "common/widgets/spacing.h"
 #include "app/state.h"
 #include "common/widgets/loading.h"
@@ -94,14 +95,9 @@ static GtkWidget *create_action_button(const char *icon, const char *action, con
 }
 
 
-static char *format_time(double seconds) {
-	return format_song_length(seconds);
-}
-
-
 static void show_time_labels(PlayerBar *bar, double time) {
-	g_autofree char *elapsed = format_time(time);
-	g_autofree char *length = format_time(bar->duration);
+	g_autofree char *elapsed = format_play_time(time);
+	g_autofree char *length = format_play_time(bar->duration);
 	gtk_label_set_text(GTK_LABEL(bar->elapsed), elapsed);
 	gtk_label_set_text(GTK_LABEL(bar->length), length);
 }
@@ -746,7 +742,7 @@ static GtkWidget *create_chapter_row(Chapter *chapter, guint number) {
 	gtk_widget_add_css_class(title, "chapter-title");
 	gtk_widget_set_hexpand(title, TRUE);
 	gtk_box_append(GTK_BOX(box), title);
-	g_autofree char *start = format_time(chapter->start);
+	g_autofree char *start = format_play_time(chapter->start);
 	GtkWidget *time = gtk_label_new(start);
 	gtk_widget_add_css_class(time, "chapter-time");
 	gtk_widget_set_valign(time, GTK_ALIGN_CENTER);

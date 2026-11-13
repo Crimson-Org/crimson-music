@@ -706,15 +706,6 @@ void clear_cache(void) {
 }
 
 
-char *format_song_length(double seconds) {
-	int total = MAX(0, (int)seconds);
-	if (total >= SECONDS_PER_HOUR)
-		return g_strdup_printf("%d:%02d:%02d", total / SECONDS_PER_HOUR,
-			total / SECONDS_PER_MINUTE % SECONDS_PER_MINUTE, total % SECONDS_PER_MINUTE);
-	return g_strdup_printf("%d:%02d", total / SECONDS_PER_MINUTE, total % SECONDS_PER_MINUTE);
-}
-
-
 double parse_song_length(const char *duration) {
 	g_auto(GStrv) parts = g_strsplit(duration ? duration : "", ":", -1);
 	double seconds = 0;

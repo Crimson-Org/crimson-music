@@ -72,8 +72,6 @@ typedef struct {
 
 void free_home(Home *home);
 
-/* A length as 3:42, or 1:04:33 from an hour on */
-char *format_song_length(double seconds);
 /* The seconds in a song's length as YouTube Music writes it, or 0 without one */
 double read_song_length(CrimsonSong *song);
 /* The artists a song links to, as each one's id and name after each other, since a song can have several */
@@ -114,7 +112,6 @@ void order_playlists(GPtrArray *playlists, const char *const *order);
 /* Playlists made in Crimson Music and kept on this computer, which can hold YouTube and local songs alike */
 #define LOCAL_PLAYLIST_PREFIX "crimson-playlist:"
 #define SECONDS_PER_MINUTE 60
-#define SECONDS_PER_HOUR (60 * SECONDS_PER_MINUTE)
 #define MILLISECONDS_PER_SECOND 1000
 /* Linked artists come as a name followed by the artist's id */
 #define ARTIST_FIELDS 2
